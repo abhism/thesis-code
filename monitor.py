@@ -5,6 +5,7 @@ import json
 import threading
 import time
 import pprint
+from host import *
 
 ###################################################
 # Global Structures
@@ -87,6 +88,17 @@ def removeDomain(domain):
     global domains
     del domains[domain.UUIDString()]
 
+def check_host_memory(conn):
+    print conn.getMemoryStats(libvirt.VIR_NODE_MEMORY_STATS_ALL_CELLS, 0)
+    pass
+
+def check_host_cpu(conn):
+    pass
+
+def check_host(conn):
+    check_host_memory(conn)
+    check_host_cpu(conn)
+
 def main():
     global domains
     conn = libvirt.open('qemu:///system')
@@ -103,26 +115,24 @@ def main():
         sys.exit(1)
     #register callbacks for domain startup events
     conn.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE, domainLifecycleCallback, None)
+    host = Host(conn)
     for domain in doms:
         if domain.isActive():
             addNewDomain(domain)
 
+    # Main montioring loop
     while True:
+        host.monitor()
         for uuid in domains.keys():
             try:
                 domain = domains[uuid]['dom']
                 getMemStats(domain)
             except:
                 print 'failed to get stats of: '+uuid
-        print domains
+        check_host(conn)
+        #print domains
         time.sleep(2)
-
-
 
 
 if __name__ == "__main__":
         main()
-#print libvirt_qemu.qemuMonitorCommand(dom0,'{"execute":"qom-get","arguments": { "path": "/machine/peripheral/balloon0","property":"guest-stats"}}',0)
-
-#print dom0.OSType()
-#print dom0.info()
