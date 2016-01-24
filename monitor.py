@@ -6,11 +6,13 @@ import threading
 import time
 import pprint
 from host import *
+from guest import *
 
 ###################################################
 # Global Structures
 ##################################################
 domains = {}
+guests = {}
 
 #####################################################
 # Libvirt native event loop
@@ -49,62 +51,18 @@ def domainLifecycleCallback(conn, domain, event, detail, opaque):
         print "stopped a domain: "+domain.UUIDString()
 
 
-
-########################################################
-# Qemu Monitor Commands
-#########################################################
-def setPollInterval(domain):
-    setPollIntervalCommand = {
-            'execute':'qom-set',
-            'arguments':{
-                'path':'/machine/peripheral/balloon0',
-                'property':'guest-stats-polling-interval',
-                'value':2
-                }
-            }
-    libvirt_qemu.qemuMonitorCommand(domain, json.dumps(setPollIntervalCommand), 0)
-
-def getMemStats(domain):
-    global domains
-    memStatsCommand = {
-            'execute': 'qom-get',
-            'arguments': {
-                'path':'/machine/peripheral/balloon0',
-                'property':'guest-stats',
-                }
-            }
-    out = libvirt_qemu.qemuMonitorCommand(domain, json.dumps(memStatsCommand), 0)
-    stats = json.loads(out)['return']['stats']
-    domains[domain.UUIDString()]['stats'] = stats
-
 def addNewDomain(domain):
-    global domains
-    uuid = domain.UUIDString()
-    domains[uuid] = {'dom': domain, 'stats': {}}
-    setPollInterval(domain)
+    global guests
+    guests[domain.UUIDString] = Guest(domain)
 
 
 def removeDomain(domain):
-    global domains
-    del domains[domain.UUIDString()]
-
-def check_host_memory(conn):
-    print conn.getMemoryStats(libvirt.VIR_NODE_MEMORY_STATS_ALL_CELLS, 0)
-    pass
-
-def check_host_cpu(conn):
-    pass
-
-def check_host(conn):
-    check_host_memory(conn)
-    check_host_cpu(conn)
+    global guests
+    del guests[domain.UUIDString()]
 
 def main():
     global domains
     conn = libvirt.open('qemu:///system')
-
-    #start the event loop
-    virEventLoopNativeStart()
     if conn == None:
         print 'Failed to open connection to the hypervisor'
         sys.exit(1);
@@ -113,6 +71,9 @@ def main():
     except:
         print 'Failed to find the domains'
         sys.exit(1)
+
+    #start the event loop
+    virEventLoopNativeStart()
     #register callbacks for domain startup events
     conn.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE, domainLifecycleCallback, None)
     host = Host(conn)
@@ -123,13 +84,11 @@ def main():
     # Main montioring loop
     while True:
         host.monitor()
-        for uuid in domains.keys():
+        for uuid in guests.keys():
             try:
-                domain = domains[uuid]['dom']
-                getMemStats(domain)
+                guests[uuid].monitor()
             except:
                 print 'failed to get stats of: '+uuid
-        check_host(conn)
         #print domains
         time.sleep(2)
 

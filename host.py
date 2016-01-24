@@ -14,7 +14,7 @@ class RunningStats:
     s2 = 0
 
     def __init__(self, used):
-        for i in range(200000):
+        for i in range(20000):
             self.data.append(numpy.random.randint(used-250, used+250))
             self.n+=1
         pass
@@ -39,18 +39,18 @@ class RunningStats:
         #var = self.variance()
         #print "Variance: " + str(var)
         #return math.sqrt(var)
-        start = time.time()
+        #start = time.time()
         dev = numpy.std(self.data)
-        end = time.time()
+        #end = time.time()
         print "std: " + str(dev)
-        print "time taken: " + str(end - start)
+        #print "time taken: " + str(end - start)
         return dev;
 
 
 class Host:
 
     #the weight of moving average
-    alpha = 0.2
+    alpha = 0.1
 
     # the moving average
     mu = 0
@@ -66,7 +66,7 @@ class Host:
     K = 0
 
     #the design parameter
-    h = 5
+    h = 7
 
     def __init__(self, conn):
         self.conn = conn
@@ -76,7 +76,7 @@ class Host:
         self.mu = usedMem
         self.std = RunningStats(usedMem)
 
-    def getMemoryStats():
+    def getMemoryStats(self):
         stats = self.conn.getMemoryStats(libvirt.VIR_NODE_MEMORY_STATS_ALL_CELLS, 0)
         return self.toMb(stats)
 
@@ -89,7 +89,7 @@ class Host:
 
     # get used memory form statistics
     def getUsedMem(self, stats):
-        used = stats['total'] - stats['free'] - 0.5*(stats['buffers']+stats['cached']) #TODO: modify 0.5
+        used = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) #TODO: modify 0.9
         return used
 
     def monitor(self):
