@@ -5,6 +5,7 @@ import math
 from collections import deque
 import numpy
 import time
+import etcd
 
 class RunningStats:
     windowSize = 200000
@@ -57,7 +58,8 @@ class Host:
 
     # threshold for migration
     thresh = 0.8
-    totalMem = 0
+    totalMem = -1
+    usedMem = -1
 
     # accumulated deviation
     d = 0
@@ -68,13 +70,26 @@ class Host:
     #the design parameter
     h = 7
 
+    # TODO: This is to be replaced with the name nova uses to identify the compute nodes
+    hostName = "someRandomValue"
+
     def __init__(self, conn):
         self.conn = conn
         stats = self.getMemoryStats()
         self.totalMem = stats['total']
-        usedMem = self.getUsedMem(stats)
+        self.usedMem = self.getUsedMem(stats)
         self.mu = usedMem
         self.std = RunningStats(usedMem)
+
+        #etcd
+        self.etcdClient = etcd.Client(port=2379)
+        self.updateEtcd()
+
+
+    def updateEtcd(self):
+        self.client.write('/'+self.hostName+'/totalMem', self.totalMem)
+        self.client.write('/'+self.hostName+'/usedMem', self.mu)
+
 
     def getMemoryStats(self):
         stats = self.conn.getMemoryStats(libvirt.VIR_NODE_MEMORY_STATS_ALL_CELLS, 0)
@@ -88,32 +103,33 @@ class Host:
         return newStats
 
     # get used memory form statistics
-    def getUsedMem(self, stats):
-        used = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) #TODO: modify 0.9
+    def getUsedMem(self, stats, correctionFactor):
+        used = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) - correctionFactor #TODO: modify 0.9
         return used
 
-    def monitor(self):
-        self.checkMemory()
+    def monitor(self, correctionFactor):
+        self.checkMemory(correctionFactor)
         self.checkCpu()
 
-    def checkMemory(self):
+    def checkMemory(self, correctionFactor):
         stats = self.getMemoryStats()
         self.totalMem = stats['total']
         # k is the slack factor which is equal to ∆/2 where ∆ is minimum shift to be detected
         # Here, we have taken ∆ as 0.1 i.e minimum 1% shift is to be detected
         self.K = 0.005*self.totalMem
         # calculate moving average
-        used = self.getUsedMem(stats)
-        print 'Used: '+ str(used)
-        self.mu = self.alpha*used + (1-self.alpha)*self.mu
+        self.usedMem = self.getUsedMem(stats, correctionFactor)
+        print 'Used: '+ str(self.usedMem)
+        self.mu = self.alpha*self.usedMem + (1-self.alpha)*self.mu
         # calcualte the deviation
-        self.d = max(0, self.d+used-(self.mu+self.K))
+        self.d = max(0, self.d+self.usedMem-(self.mu+self.K))
         print "mu: " + str(self.mu)
         print "d: " + str(self.d)
         self.std.add(used)
         H = self.h*self.std.standardDeviation()
         if(self.d > H):
             print 'Profile Changed'
+            self.updateEtcd()
             if(self.mu > self.thresh*self.totalMem):
                 print 'Threshold exceeded. Migrate!'
 
