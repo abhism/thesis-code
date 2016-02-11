@@ -103,4 +103,9 @@ class Guest:
         except:
             "Unable to get Actual memory of domain: " + self.domName
 
+    def balloon(self, target):
+        print "Ballooning " + self.domName + " from "+self.currentmem+" to "+ target
+        self.domain.setMemory(target*1024)
+        print "Finished ballooning " + self.domName
+
 

@@ -61,34 +61,41 @@ def removeDomain(domain):
 def monitor():
     global guests
     global host
+    # guests with idle memory to give away
     idle = {}
+    # guests which need mopre memory
     needy = {}
-    correctionFactor = 0
+    # extra memory that is needed by the guests which are under load
     extraMemory = 0
+    # IdleMemory is the one which has been allocated to the the qemu process, but is free inside the guest VM.
+    # This memory can be retrieved by ballooning, hence should not be counted in used memory of the host
+    idleMemory = 0
+    # Sum of the maxmem of all guest. Used to decide overcommitment factor and shares of each guest
+    totalGuestMemory = 0.0
+
+
     # Monitor all the guests
     for uuid in guests.keys():
         guest = guests[uuid]
-        # correctionFactor represents the idle memory, which has been allocated to the the qemu process, but is free inside the guest VM.
-        # This memory can be retrieved by ballooning, hence should not be counted in used memory of the host
-        correctionFactor = 0
         try:
             guest.monitor()
+            totalGuestMemory += guest.maxmem
             # TODO: Doubt whether usedMem or avgUsed should be used here
             if guest.actualmem - guest.usedMem > 0:
                 idle[uuid] = guest.actualmem - guest.usedMem
-                correctionFactor += idle[uuid]
+                idleMemory += idle[uuid]
             # add 10% more memory when guest is overloaded
             if guest.avgUsed > 0.95*guest.currentmem and guest.currentmem < self.maxmem:
                 needy[uuid] = 0.1*guest.maxmem
                 extraMemory += needy[uuid]
         except:
             print "Unable to monitor guest: " + uuid
-    print 'correctionFactor: ' + str(correctionFactor)
+    print 'Total Idle Memory: ' + str(idleMemory)
 
 
     # Monitor the host
     try:
-       host.monitor(correctionFactor)
+       host.monitor(idleMemory)
         # This will try to migrate away guests of there is a overload
     except:
         print "Unable to monitor host"
@@ -104,15 +111,32 @@ def monitor():
             needyGuest = guests[uuid]
             need = needy[uuid]
             while pot < need:
-                excessUuid = idle.keys()[0]
-                excessGuest = guests[excessUuid]
-                idlemem = idle[excessUuid]
-                excessGuest.domain.setMemory((excessGuest.currentmem - idlemem)*1024)
-                pot += idlemem
-            needyGuest.setMemory(need*1024)
+                idleUuid = idle.keys()[0]
+                idleGuest = guests[idleUuid]
+                guestIdlemem = idle[idleUuid]
+                idleGuest.balloon(idleGuest.currentmem - guestIdlemem)
+                pot += guestIdlemem
+            needyGuest.balloon(neeedyGuest.currentmem + need)
     # If not enough memory is left to give away
     else:
-        pass
+        # calculate entitlement of each guest
+        entitlement = {}
+        pot = host.totalMem - (host.usedMem + idleMemory)
+        overcommitmentFactor = host.totalMem/totalGuestMemory
+        excess = {}
+        canGive = 0
+        for uuid in guests.keys():
+            guest = guests[uuid]
+            entitlement[uuid] = overcommitmentFactor*guest.maxmem
+            lowerBound = min(entitlement[uuid], guest.usedMem)
+            if guest.actualmem - lowerBound > 0:
+                excess[uuid] = guest.actualmem - lowerBound
+                canGive += excess[uuid]
+                if uuid in needy:
+                    del needy[uuid]
+                    extraMemory -= 0.1*guest.maxmem
+
+
 
 
 def main():
