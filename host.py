@@ -7,6 +7,8 @@ import numpy
 import time
 import etcd
 
+hypervisor_reserved = 500
+
 class RunningStats:
     windowSize = 200000
     data = deque([])
@@ -58,8 +60,11 @@ class Host:
 
     # threshold for migration
     thresh = 0.8
-    totalMem = -1
-    usedMem = -1
+    totalmem = -1
+
+    usedmem = -1
+
+    loadmem = -1
 
     # accumulated deviation
     d = 0
@@ -76,10 +81,11 @@ class Host:
     def __init__(self, conn):
         self.conn = conn
         stats = self.getMemoryStats()
-        self.totalMem = stats['total']
-        self.usedMem = self.getUsedMem(stats)
-        self.mu = usedMem
-        self.std = RunningStats(usedMem)
+        self.totalmem = stats['total']
+        self.usedmem = stats['total'] - stats['free']
+        self.loadmem = self.getLoadMem(stats)
+        self.mu = loadmem
+        self.std = RunningStats(loadmem)
 
         #etcd
         self.etcdClient = etcd.Client(port=2379)
@@ -87,8 +93,8 @@ class Host:
 
 
     def updateEtcd(self):
-        self.client.write('/'+self.hostName+'/totalMem', self.totalMem)
-        self.client.write('/'+self.hostName+'/usedMem', self.mu)
+        self.client.write('/'+self.hostName+'/totalmem', self.totalmem)
+        self.client.write('/'+self.hostName+'/loadmem', self.mu)
 
 
     def getMemoryStats(self):
@@ -103,26 +109,29 @@ class Host:
         return newStats
 
     # get used memory form statistics
-    def getUsedMem(self, stats, correctionFactor):
-        used = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) - correctionFactor #TODO: modify 0.9
-        return used
+    def getLoadMem(self, stats, idleMemory):
+        #TODO: find correct way to use hypervisor reserved
+        # It should take into account the memory used by non qemu processes
+        load = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) - idleMemory + hypervisor_reserved #TODO: modify 0.9
+        return load
 
-    def monitor(self, correctionFactor):
-        self.checkMemory(correctionFactor)
+    def monitor(self, idleMemory):
+        self.checkMemory(idleMemory)
         self.checkCpu()
 
-    def checkMemory(self, correctionFactor):
+    def checkMemory(self, idleMemory):
         stats = self.getMemoryStats()
-        self.totalMem = stats['total']
+        self.totalmem = stats['total']
         # k is the slack factor which is equal to ∆/2 where ∆ is minimum shift to be detected
         # Here, we have taken ∆ as 0.1 i.e minimum 1% shift is to be detected
-        self.K = 0.005*self.totalMem
+        self.K = 0.005*self.totalmem
+        self.usedmem = stats['total'] - stats['free']
         # calculate moving average
-        self.usedMem = self.getUsedMem(stats, correctionFactor)
-        print 'Used: '+ str(self.usedMem)
-        self.mu = self.alpha*self.usedMem + (1-self.alpha)*self.mu
+        self.loadmem = self.getLoadMem(stats, idleMemory)
+        print 'Load mem: '+ str(self.usedmem)
+        self.mu = self.alpha*self.loadmem + (1-self.alpha)*self.mu
         # calcualte the deviation
-        self.d = max(0, self.d+self.usedMem-(self.mu+self.K))
+        self.d = max(0, self.d+self.loadmem-(self.mu+self.K))
         print "mu: " + str(self.mu)
         print "d: " + str(self.d)
         self.std.add(used)
