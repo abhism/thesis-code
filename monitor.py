@@ -6,6 +6,7 @@ import json
 import threading
 import time
 import pprint
+import logging
 from host import *
 from guest import *
 
@@ -64,20 +65,20 @@ def domainLifecycleCallback(conn, domain, event, detail, opaque):
     eventType = eventToString(event)
     if(eventType == "Started" or eventType == "Resumed"):
         addNewDomain(domain)
-        print "started a new domain: "+domain.UUIDString()
     elif(eventType == "Shutdown" or eventType == "Suspended" or eventType == "Stopped"):
         removeDomain(domain)
-        print "stopped a domain: "+domain.UUIDString()
 
 
 def addNewDomain(domain):
     global guests
-    guests[domain.UUIDString] = Guest(domain)
+    guests[domain.UUIDString()] = Guest(domain)
+    logging.info("Added a new domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
 
 
 def removeDomain(domain):
     global guests
     del guests[domain.UUIDString()]
+    logging.info("Removed a domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
 
 def calculateSoftIdle(guest):
     lower = max(guest.usedmem, guest_reserved)
@@ -88,7 +89,7 @@ def calculateHardIdle(guest):
     return max(guest.usedmem - lower, 0)
 
 def calculatePot(host, idleMemory):
-    return host.totlamem - host.loadmem - idleMemory
+    return host.totalmem - host.loadmem - idleMemory
 
 def monitor():
     global guests
@@ -131,6 +132,10 @@ def monitor():
     # Monitor all the guests
     for uuid in guests.keys():
         guest = guests[uuid]
+
+        assert uuid == guest.uuid
+
+        logging.debug('Monitoring guest name: %s, uuid: %s', guest.domName, uuid)
         try:
             guest.monitor()
             totalGuestMemory += guest.maxmem
@@ -141,17 +146,21 @@ def monitor():
             # add 10% more memory when guest is overloaded
             if guest.avgUsed > 0.95*guest.currentmem and guest.currentmem < self.maxmem:
                 needy[uuid] = 0.1*guest.maxmem
+                guest.log("Is needy, need: %dMB", needy[uuid])
                 extraMemory += needy[uuid]
                 # need guest do not have idle
                 softIdle[uuid] = 0
                 hardIdle[uuid] = 0
+            guest.log('Soft Idle is %dMB', softIdle[uuid])
+            guest.log('Hard Idle is %dMB', hardIdle[uuid])
             softIdleMemory += softIdle[uuid]
             hardIdleMemory += hardIdle[uuid]
         except:
-            print "Unable to monitor guest: " + uuid
-    print 'Total Soft Idle Memory: ' + str(softIdleMemory)
-    print 'Total Hard Idle Memory: ' + str(hardIdleMemory)
+            logging.exception('Unable to monitor guest name: %s, uuid: %s ',guest.domName, uuid)
 
+    logging.debug("Total soft idle memory: %dMB", softIdleMemory)
+    logging.debug("Total hard idle memory: %dMB", hardIdleMemory)
+    logging.debug("Extra Memory Required: %dMB", extraMemory)
     # Monitor the host
     try:
     # Idle Memory  should be subtracted from guest used memory.
@@ -160,29 +169,34 @@ def monitor():
     # requirements cannot be satisfied after hard ballooning of all the other guests.
        host.monitor(softIdleMemory + hardIdleMemory)
         # This will try to migrate away guests of there is a overload
-    except:
-        print "Unable to monitor host"
+    except Exception as e:
+        logging.exception('Unable to monitor host')
 
     # If demands can be satisfied by soft reclamation
     if host.loadmem + hardIdleMemory + extraMemory <= host.totalmem:
+        logging.debug("Demands can be satisfied by soft reclamation")
         pot = calculatePot(host, softIdleMemory + hardIdleMemory)
         for uuid in needy.keys():
             needyGuest = guests[uuid]
             need = needy[uuid]
             # TODO: Fix the while loop. This might go into an infinite loop
             # Possibly stop when all guests ballooned
-            while pot < need:
+            while pot < need and len(softIdle.keys()) > 0:
                 idleUuid = softIdle.keys()[0]
                 softIdleGuest = guests[idleUuid]
                 softIdleGuestMem = softIdle[idleUuid]
                 softIdleGuest.balloon(idleGuest.currentmem - softIdleGuestMem)
                 pot += softIdleGuestMem
                 del softIdle[idleUuid]
-            needyGuest.balloon(needyGuest.currentmem + need )
-            pot -= need
+            if(pot-need < -100):
+                logging.warn("More than 100MB deficit in pot. check the algo.")
+            else:
+                needyGuest.balloon(needyGuest.currentmem + need )
+                pot -= need
 
     # If hard reclamation required
     elif host.loadmem + extraMemory < host.totalmem:
+        logging.debug("Demands need hard reclamation")
         # pot represents the memory free to give away without ballooning
         # more memory can be added to pot buy ballooning down any guest
         # ballooning up a guest takes away memory from the pot
@@ -192,7 +206,7 @@ def monitor():
         for uuid in needy.keys():
             needyGuest = guests[uuid]
             need = needy[uuid]
-            while pot < need:
+            while pot < need and len(softIdle.keys()) > 0:
                 idleUuid = softIdle.keys()[0]
                 idleGuest = guests[idleUuid]
                 softIdleGuestMem = softIdle[idleUuid]
@@ -205,10 +219,14 @@ def monitor():
                 pot += softIdleGuestMem + hardReclaim
                 del softIdle[idleUuid]
                 del hardIdle[idleUuid]
-            needyGuest.balloon(neeedyGuest.currentmem + need)
-            pot -= need
+            if(pot-need < -100):
+                logging.warn("More than 100MB deficit in pot. check the algo.")
+            else:
+                needyGuest.balloon(neeedyGuest.currentmem + need)
+                pot -= need
     # If not enough memory is left to give away
     else:
+        logging.debug("Overload, calculate entitlement")
         # calcualte the entitlement of each guest
         idleMemory = 0
         idle = {}
@@ -218,14 +236,15 @@ def monitor():
         for uuid in guests.keys():
             guest = guests[uuid]
             entitlement = (guest.maxmem*host.totalmem)/totalGuestMemory
-            id entitlement < guest_reserved:
-                print "WARNING: too less entitlement."+str(entitlement) + " MB for VM: "+ uuid
+            if entitlement < guest_reserved:
+                guest.log("Entitlement less than reserved: %dMB", entitlement)
                 #TODO: next line is wrong. Fix it.
                 #The intent is that if entitlement is less than reserved,
                 # the extra amount should be given from other VM's entitlement.
                 # Below implementation may work, but is wrong
                 totalGuestMemory -= (guest_reserved - entitlement)
                 entitlement = guest_reserved
+            guest.log("Entitlement: %dMB", entitlement)
             if (uuid in needy.keys()) and guest.currentmem < entitlement:
                 needy[uuid] = entitlement - guest.currentmem
                 extraMemory += entitlement - guest.currentmem
@@ -253,35 +272,51 @@ def monitor():
                 pot += idleReclaim + usedReclaim
                 del idle[excessUuid]
                 del excessUsed[excessUuid]
-            needyGuest.balloon(neeedyGuest.currentmem + need)
-            pot -= need
- 
+            if(pot-need < -100):
+                logging.warn("More than 100MB deficit in pot. check the algo.")
+            else:
+                needyGuest.balloon(neeedyGuest.currentmem + need)
+                pot -= need
+
 
 def main():
+    # Set up logger
+    logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)s: %(message)s', level=logging.DEBUG)
+    logging.info('Monitoring started!')
+
     # check if root
     if os.geteuid() != 0:
-        sys.stderr.write("Sorry, root permission required.\n")
-        sys.stderr.close()
+        logging.error('Root permission required to run the script! Exiting.')
         sys.exit(1)
 
     # connect to the hypervisor
     conn = libvirt.open('qemu:///system')
     if conn == None:
-        print 'Failed to open connection to the hypervisor'
+        logging.error('Failed to open connection to the hypervisor, Exiting')
         sys.exit(1);
 
     # get the list of all domains managed by the hypervisor
     try:
         doms = conn.listAllDomains()
-    except:
-        print 'Failed to find the domains'
+    except Exception as e:
+        logging.exception('Failed to find the domains, Exiting')
         sys.exit(1)
 
     # start the event loop
-    virEventLoopNativeStart()
+    try:
+        virEventLoopNativeStart()
+        logging.info("libvirt event loop started")
+    except Exception as e:
+        logging.exception('Failed to start libvirt event loop, Exiting')
+        sys.exit(1)
     # register callbacks for domain startup events
-    conn.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE, domainLifecycleCallback, None)
+    try:
+        conn.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE, domainLifecycleCallback, None)
+        logging.info("libvirt domain lifecycle callbacks registered")
+    except Exception as e:
+        logging.exception('Failed to register domain lifecycle events, Exiting')
 
+    global host
     host = Host(conn)
 
     for domain in doms:
@@ -290,7 +325,13 @@ def main():
 
     # Main montioring loop
     while True:
-        monitor()
+        try:
+            #logging.info("***************************************")
+            logging.info("****Starting new round of monitoring***")
+            #logging.info("***************************************")
+            monitor()
+        except Exception as e:
+            logging.exception('An exception occured in monitoring')
         time.sleep(2)
 
 

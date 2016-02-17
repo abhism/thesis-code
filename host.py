@@ -6,7 +6,10 @@ from collections import deque
 import numpy
 import time
 import etcd
+import os
+import logging
 
+PAGESIZE = os.sysconf("SC_PAGE_SIZE") / 1024 #KiB
 hypervisor_reserved = 500
 
 class RunningStats:
@@ -40,13 +43,10 @@ class RunningStats:
 
     def standardDeviation(self):
         #var = self.variance()
-        #print "Variance: " + str(var)
         #return math.sqrt(var)
         #start = time.time()
         dev = numpy.std(self.data)
         #end = time.time()
-        print "std: " + str(dev)
-        #print "time taken: " + str(end - start)
         return dev;
 
 
@@ -83,18 +83,19 @@ class Host:
         stats = self.getMemoryStats()
         self.totalmem = stats['total']
         self.usedmem = stats['total'] - stats['free']
-        self.loadmem = self.getLoadMem(stats)
-        self.mu = loadmem
-        self.std = RunningStats(loadmem)
+        self.loadmem = self.getLoadMem(stats, 0)
+        self.mu = self.loadmem
+        self.std = RunningStats(self.loadmem)
 
         #etcd
-        self.etcdClient = etcd.Client(port=2379)
-        self.updateEtcd()
+        #self.etcdClient = etcd.Client(port=2379)
+        #self.updateEtcd()
 
 
     def updateEtcd(self):
-        self.client.write('/'+self.hostName+'/totalmem', self.totalmem)
-        self.client.write('/'+self.hostName+'/loadmem', self.mu)
+        #self.etcdClient.write('/'+self.hostName+'/totalmem', self.totalmem)
+        #self.etcdClient.write('/'+self.hostName+'/loadmem', self.mu)
+        pass
 
 
     def getMemoryStats(self):
@@ -106,13 +107,15 @@ class Host:
         newStats = {}
         for key in stats.keys():
             newStats[key] = round(stats[key]/1024)
+        logging.debug("Stats: %s", str(newStats))
         return newStats
 
     # get used memory form statistics
     def getLoadMem(self, stats, idleMemory):
-        #TODO: find correct way to use hypervisor reserved
-        # It should take into account the memory used by non qemu processes
-        load = stats['total'] - stats['free'] - 0.9*(stats['buffers']+stats['cached']) - idleMemory + hypervisor_reserved #TODO: modify 0.9
+        vmLoad = self.getVMLoad()
+        hypervisorLoad = max(stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad, hypervisor_reserved)
+        logging.debug("Hypervisor Load is %dMB", hypervisorLoad)
+        load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
         return load
 
     def monitor(self, idleMemory):
@@ -128,20 +131,39 @@ class Host:
         self.usedmem = stats['total'] - stats['free']
         # calculate moving average
         self.loadmem = self.getLoadMem(stats, idleMemory)
-        print 'Load mem: '+ str(self.usedmem)
         self.mu = self.alpha*self.loadmem + (1-self.alpha)*self.mu
         # calcualte the deviation
         self.d = max(0, self.d+self.loadmem-(self.mu+self.K))
-        print "mu: " + str(self.mu)
-        print "d: " + str(self.d)
-        self.std.add(used)
+        self.std.add(self.loadmem)
         H = self.h*self.std.standardDeviation()
+        self.logStats(H)
         if(self.d > H):
             print 'Profile Changed'
             self.updateEtcd()
-            if(self.mu > self.thresh*self.totalMem):
+            if(self.mu > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
 
     def checkCpu(self):
         pass
+
+    def logStats(self, H):
+        logging.debug('Host totalmem: %dMB', self.totalmem)
+        logging.debug('Host usedmem: %dMB', self.usedmem)
+        logging.debug('Host loadmem: %dMB', self.loadmem)
+        logging.debug('Host mu: %f', self.mu)
+        logging.debug('Host d: %f', self.d)
+        logging.debug('Host H: %f', H)
+
+    def getVMLoad(self):
+        pids = []
+        memUsed = 0
+        for fil in os.listdir('/var/run/libvirt/qemu/'):
+            if fil.endswith('.pid'):
+                pids.append(open('/var/run/libvirt/qemu/'+fil).read())
+        for pid in pids:
+            Rss = (int(open('/proc/'+pid+'/statm').readline().split()[1])
+                       * PAGESIZE)
+            memUsed += Rss/1024 # Mb
+        logging.debug("VM Load is: %dMB", memUsed)
+        return memUsed
 
