@@ -144,8 +144,8 @@ def monitor():
             softIdle[uuid] = calculateSoftIdle(guest)
             hardIdle[uuid] = calculateHardIdle(guest)
             # add 10% more memory when guest is overloaded
-            if guest.avgUsed > 0.95*guest.currentmem and guest.currentmem < self.maxmem:
-                needy[uuid] = 0.1*guest.maxmem
+            if guest.avgUsed > 0.8*guest.currentmem and guest.currentActualmem < guest.maxmem:
+                needy[uuid] = min(0.1*guest.maxmem,guest.maxmem-guest.currentActualmem)
                 guest.log("Is needy, need: %dMB", needy[uuid])
                 extraMemory += needy[uuid]
                 # need guest do not have idle
@@ -179,19 +179,17 @@ def monitor():
         for uuid in needy.keys():
             needyGuest = guests[uuid]
             need = needy[uuid]
-            # TODO: Fix the while loop. This might go into an infinite loop
-            # Possibly stop when all guests ballooned
             while pot < need and len(softIdle.keys()) > 0:
                 idleUuid = softIdle.keys()[0]
                 softIdleGuest = guests[idleUuid]
                 softIdleGuestMem = softIdle[idleUuid]
-                softIdleGuest.balloon(idleGuest.currentmem - softIdleGuestMem)
+                softIdleGuest.balloon(softIdleGuest.currentActualmem - softIdleGuestMem)
                 pot += softIdleGuestMem
                 del softIdle[idleUuid]
             if(pot-need < -100):
                 logging.warn("More than 100MB deficit in pot. check the algo.")
             else:
-                needyGuest.balloon(needyGuest.currentmem + need )
+                needyGuest.balloon(needyGuest.currentActualmem + need )
                 pot -= need
 
     # If hard reclamation required
@@ -215,14 +213,14 @@ def monitor():
                 if hardReclaim > 0:
                     idleGuest.balloon(idleGuest.usedmem - hardReclaim)
                 elif softIdleGuestMem > 0:
-                    idleGuest.balloon(idleGuest.currentmem - softIdleGuestMem)
+                    idleGuest.balloon(idleGuest.currentActualmem - softIdleGuestMem)
                 pot += softIdleGuestMem + hardReclaim
                 del softIdle[idleUuid]
                 del hardIdle[idleUuid]
             if(pot-need < -100):
                 logging.warn("More than 100MB deficit in pot. check the algo.")
             else:
-                needyGuest.balloon(neeedyGuest.currentmem + need)
+                needyGuest.balloon(neeedyGuest.currentActualmem + need)
                 pot -= need
     # If not enough memory is left to give away
     else:
@@ -245,24 +243,24 @@ def monitor():
                 totalGuestMemory -= (guest_reserved - entitlement)
                 entitlement = guest_reserved
             guest.log("Entitlement: %dMB", entitlement)
-            if (uuid in needy.keys()) and guest.currentmem < entitlement:
-                needy[uuid] = entitlement - guest.currentmem
-                extraMemory += entitlement - guest.currentmem
+            if (uuid in needy.keys()) and guest.currentActualmem < entitlement:
+                needy[uuid] = entitlement - guest.currentActualmem
+                extraMemory += entitlement - guest.currentActualmem
             elif uuid in needy.keys():
                 del needy[uuid]
                 idle[uuid] = calculateSoftIdle(guest) + calculateHardIdle(guest)
                 idleMemory += idle[uuid]
-                excessUsed[uuid] = max(guest.currentmem - idle[uuid] - entitlement, 0)
+                excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
             else:
                 idle[uuid] = softIdle[uuid] + hardIdle[uuid]
                 idleMemory += idle[uuid]
-                excessUsed[uuid] = max(guest.currentmem - idle[uuid] - entitlement, 0)
+                excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
         pot = calculatePot(host, idleMemory)
         needAfterIdle = extraMemory - idleMemory
         for needyUuid in needy.keys():
             needyGuest = guests[needyUuid]
             need = needy[needyUuid]
-            while pot < need:
+            while pot < need and len(idle.keys()) > 0:
                 excessUuid = idle.keys()[0]
                 excessGuest = guests[excessUuid]
                 usedReclaim = excessUsed[excessUuid]
@@ -275,7 +273,7 @@ def monitor():
             if(pot-need < -100):
                 logging.warn("More than 100MB deficit in pot. check the algo.")
             else:
-                needyGuest.balloon(neeedyGuest.currentmem + need)
+                needyGuest.balloon(neeedyGuest.currentActualmem + need)
                 pot -= need
 
 

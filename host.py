@@ -140,6 +140,8 @@ class Host:
         if(self.d > H):
             print 'Profile Changed'
             self.updateEtcd()
+            # TODO: verify if making d 0 after profile change makes sense
+            self.d = 0
             if(self.mu > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
 

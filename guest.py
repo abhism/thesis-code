@@ -3,6 +3,7 @@ import libvirt
 import libvirt_qemu
 import json
 import logging
+import subprocess
 
 PAGESIZE = os.sysconf("SC_PAGE_SIZE") / 1024 #KiB
 
@@ -20,6 +21,7 @@ class Guest:
 
     maxmem = -1
 
+    currentActualmem = -1
     currentmem = -1
 
     #actualmem = -1
@@ -46,6 +48,9 @@ class Guest:
         self.maxmem = self.domain.maxMemory()/1024
         self.getMemoryStats()
         self.currentmem = self.stats['stat-total-memory']
+        # There is a slight gap between the currentmem which is set and which is reported by the VM.
+        # currentActualmem is the memory that is set by the user while currentmem is reported by the VM.
+        self.currentActualmem = self.domain.info()[2]/1024
         # usedmem should be caclulated before allocatedmem
         self.usedmem = self.stats['stat-total-memory'] - self.stats['stat-free-memory']
         self.avgUsed = self.getLoadMem()
@@ -55,6 +60,9 @@ class Guest:
     def monitor(self):
         # calculate used memory
         self.getMemoryStats()
+        self.maxmem = self.domain.maxMemory()/1024
+        self.currentmem = self.stats['stat-total-memory']
+        self.currentActualmem = self.domain.info()[2]/1024
         self.usedmem = self.stats['stat-total-memory'] - self.stats['stat-free-memory']
         self.loadmem = self.getLoadMem()
         self.avgUsed = self.alpha*self.loadmem + (1-self.alpha)*self.avgUsed
@@ -64,7 +72,7 @@ class Guest:
         return self.avgUsed
 
     def getLoadMem(self):
-        return self.stats['stat-total-memory'] - self.stats['stat-free-memory'] - 0.9*self.stats['stats-buffer-cache']
+        return self.stats['stat-total-memory'] - self.stats['stat-free-memory'] - 0.9*self.stats['stat-buffer-cache']
 
     # Convert the stats to MB
     def toMb(self, stats):
@@ -72,7 +80,9 @@ class Guest:
         for key in stats.keys():
             newStats[key] = round(stats[key]/(1024*1024))
         ## TODO: remove the line below when using modified qemu
-        newStats['stats-buffer-cache'] = 0
+        if 'stat-buffer-cache' not in newStats.keys():
+            logging.warn('guest memory stats do not have buffer-cache info. Use the modified qemu')
+            newStats['stat-buffer-cache'] = 0
         return newStats
 
 
@@ -125,11 +135,15 @@ class Guest:
             return 500
         pass
 
-    #TODO: Fix this. should get RSS of the ram block, not of the entire process.
     def getAllocatedMem(self):
         try:
-            Rss = (int(open('/proc/'+self.pid+'/statm').readline().split()[1])
-                       * PAGESIZE)
+            Rss = self.usedmem
+            mmaps = subprocess.check_output(['pmap','-X',self.pid]).splitlines()[2:]
+            for mmap in mmaps:
+                splits = mmap.split()
+                if int(splits[5]) == self.domain.maxMemory():
+                    Rss = int(splits[6])
+                    break
             return max(Rss/1024 - self.getQemuOverhead(), self.usedmem) # Mb
         except Exception as e:
             logging.exception("name: %s, uuid: %s, Unable to get allocated memory",self.domName, self.uuid)
@@ -137,8 +151,8 @@ class Guest:
             return self.currentmem
 
     def balloon(self, target):
-        self.log("Started ballooning form %dMB to %dMB", self.currentmem, target)
-        self.domain.setMemory(target*1024)
+        self.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
+        self.domain.setMemory(int(target*1024))
         self.log("Finished ballooning %s", "")
 
     def log(self, msg, extra):
