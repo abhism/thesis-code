@@ -111,11 +111,15 @@ class Host:
         return newStats
 
     # get used memory form statistics
+    # TODO: find a way to use swap memory in loadmem too
     def getLoadMem(self, stats, idleMemory):
         vmLoad = self.getVMLoad()
-        hypervisorLoad = max(stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad, hypervisor_reserved)
+        hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
+        # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
+        hypervisor_extra = max(hypervisorLoad-hypervisor_reserved, 0)
         logging.debug("Hypervisor Load is %dMB", hypervisorLoad)
-        load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
+        #load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
+        load = (stats['total'] - self.getAvailableMemory()) + hypervisor_extra - idleMemory
         return load
 
     def monitor(self, idleMemory):
@@ -169,3 +173,6 @@ class Host:
         logging.debug("VM Load is: %dMB", memUsed)
         return memUsed
 
+    def getAvailableMemory(self):
+        line = open('/proc/meminfo').readlines()[2]
+        return int(line.split()[1])/1024
