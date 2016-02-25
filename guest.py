@@ -22,15 +22,17 @@ class Guest:
     maxmem = -1
 
     currentActualmem = -1
-    currentmem = -1
 
-    #actualmem = -1
+    currentmem = -1
 
     allocatedmem = -1
 
     usedmem = -1
 
     loadmem = -1
+
+    # available memory taken from the 3rd line of /proc/meminfo
+    #availablemem = -1
 
     avgUsed = -1
 
@@ -72,7 +74,7 @@ class Guest:
         return self.avgUsed
 
     def getLoadMem(self):
-        return self.stats['stat-total-memory'] - self.stats['stat-free-memory'] - 0.9*self.stats['stat-buffer-cache']
+        return self.stats['stat-total-memory'] - self.stats['stat-available-memory']
 
     # Convert the stats to MB
     def toMb(self, stats):
@@ -80,9 +82,9 @@ class Guest:
         for key in stats.keys():
             newStats[key] = round(stats[key]/(1024*1024))
         ## TODO: remove the line below when using modified qemu
-        if 'stat-buffer-cache' not in newStats.keys():
-            logging.warn('guest memory stats do not have buffer-cache info. Use the modified qemu')
-            newStats['stat-buffer-cache'] = 0
+        if 'stat-available-memory' not in newStats.keys():
+            logging.error('guest memory stats do not have available memory. Use the modified qemu')
+            newStats['stat-available-memory'] = newStats['stat-free-memory']
         return newStats
 
 
