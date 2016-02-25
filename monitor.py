@@ -135,7 +135,7 @@ def monitor():
             softIdleMemory += softIdle[uuid]
             hardIdleMemory += hardIdle[uuid]
         except:
-            logging.exception('Unable to monitor guest name: %s, uuid: %s ',guest.domName, uuid)
+            errorlogger.exception('Unable to monitor guest name: %s, uuid: %s ',guest.domName, uuid)
 
     logging.debug("Total soft idle memory: %dMB", softIdleMemory)
     logging.debug("Total hard idle memory: %dMB", hardIdleMemory)
@@ -149,7 +149,7 @@ def monitor():
        host.monitor(softIdleMemory + hardIdleMemory)
         # This will try to migrate away guests of there is a overload
     except Exception as e:
-        logging.exception('Unable to monitor host')
+        errorlogger.exception('Unable to monitor host')
 
     # If demands can be satisfied by soft reclamation
     if host.loadmem + hardIdleMemory + extraMemory <= host.totalmem:
@@ -265,44 +265,49 @@ def main():
     try:
         config.read("config.ini")
     except Exception as e:
-        logging.exception('Cannot read config, Exiting!')
+        errorlogger.exception('Cannot read config, Exiting!')
         sys.exit(1)
 
     # Set up logger
-    logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)s: %(message)s', level=logging.DEBUG)
-    logging.info('Monitoring started!')
+    #logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)8s: %(message)s', level=logging.DEBUG)
+    debuglogger.info('Monitoring started!')
 
     # check if root
     if os.geteuid() != 0:
-        logging.error('Root permission required to run the script! Exiting.')
+        errorlogger.error('Root permission required to run the script! Exiting.')
         sys.exit(1)
 
     # connect to the hypervisor
-    conn = libvirt.open('qemu:///system')
+    try:
+        conn = libvirt.open('qemu:///system')
+    except Exception as e:
+        errorlogger.exception('Failed to open connection to the hypervisor, Exiting')
+        sys.exit(1)
+
     if conn == None:
-        logging.error('Failed to open connection to the hypervisor, Exiting')
-        sys.exit(1);
+        errorlogger.error('Failed to open connection to the hypervisor, Exiting')
+        sys.exit(1)
 
     # get the list of all domains managed by the hypervisor
     try:
         doms = conn.listAllDomains()
     except Exception as e:
-        logging.exception('Failed to find the domains, Exiting')
+        errorlogger.exception('Failed to find the domains, Exiting')
         sys.exit(1)
 
     # start the event loop
     try:
         virEventLoopNativeStart()
-        logging.info("libvirt event loop started")
+        debuglogger.info("libvirt event loop started")
     except Exception as e:
-        logging.exception('Failed to start libvirt event loop, Exiting')
+        errorlogger.exception('Failed to start libvirt event loop, Exiting')
         sys.exit(1)
     # register callbacks for domain startup events
     try:
         conn.domainEventRegisterAny(None, libvirt.VIR_DOMAIN_EVENT_ID_LIFECYCLE, domainLifecycleCallback, None)
-        logging.info("libvirt domain lifecycle callbacks registered")
+        debuglogger.info("libvirt domain lifecycle callbacks registered")
     except Exception as e:
-        logging.exception('Failed to register domain lifecycle events, Exiting')
+        errorlogger.exception('Failed to register domain lifecycle events, Exiting')
 
     global host
     host = Host(conn)
@@ -314,10 +319,10 @@ def main():
     # Main montioring loop
     while True:
         try:
-            logging.info("****Starting new round of monitoring***")
+            debuglogger.info("****Starting new round of monitoring***")
             monitor()
         except Exception as e:
-            logging.exception('An exception occured in monitoring')
+            errorlogger.exception('An exception occured in monitoring')
         time.sleep(config.getint('monitor', 'time'))
 
 

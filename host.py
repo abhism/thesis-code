@@ -6,7 +6,6 @@ from collections import deque
 import numpy
 import time
 import os
-import logging
 import etcd
 from globals import *
 
@@ -112,7 +111,7 @@ class Host:
         newStats = {}
         for key in stats.keys():
             newStats[key] = round(stats[key]/1024)
-        logging.debug("Stats: %s", str(newStats))
+        debuglogger.debug("Stats: %s", str(newStats))
         return newStats
 
     # get used memory form statistics
@@ -123,7 +122,7 @@ class Host:
         hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
         hypervisor_extra = max(hypervisorLoad-hypervisor_reserved, 0)
-        logging.debug("Hypervisor Load is %dMB", hypervisorLoad)
+        debuglogger.debug("Hypervisor Load is %dMB", hypervisorLoad)
         #load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
         load = (stats['total'] - self.getAvailableMemory()) + hypervisor_extra - idleMemory
         return load
@@ -162,12 +161,12 @@ class Host:
         pass
 
     def logStats(self, H):
-        logging.debug('Host totalmem: %dMB', self.totalmem)
-        logging.debug('Host usedmem: %dMB', self.usedmem)
-        logging.debug('Host loadmem: %dMB', self.loadmem)
-        logging.debug('Host mu: %f', self.mu)
-        logging.debug('Host d: %f', self.d)
-        logging.debug('Host H: %f', H)
+        debuglogger.debug('Host totalmem: %dMB', self.totalmem)
+        debuglogger.debug('Host usedmem: %dMB', self.usedmem)
+        debuglogger.debug('Host loadmem: %dMB', self.loadmem)
+        debuglogger.debug('Host mu: %f', self.mu)
+        debuglogger.debug('Host d: %f', self.d)
+        debuglogger.debug('Host H: %f', H)
 
     def getVMLoad(self):
         pids = []
@@ -179,7 +178,7 @@ class Host:
             Rss = (int(open('/proc/'+pid+'/statm').readline().split()[1])
                        * PAGESIZE)
             memUsed += Rss/1024 # Mb
-        logging.debug("VM Load is: %dMB", memUsed)
+        debuglogger.debug("VM Load is: %dMB", memUsed)
         return memUsed
 
     def getAvailableMemory(self):

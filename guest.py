@@ -2,8 +2,8 @@ import os
 import libvirt
 import libvirt_qemu
 import json
-import logging
 import subprocess
+from globals import *
 
 PAGESIZE = os.sysconf("SC_PAGE_SIZE") / 1024 #KiB
 
@@ -83,7 +83,7 @@ class Guest:
             newStats[key] = round(stats[key]/(1024*1024))
         ## TODO: remove the line below when using modified qemu
         if 'stat-available-memory' not in newStats.keys():
-            logging.error('guest memory stats do not have available memory. Use the modified qemu')
+            errorlogger.error('guest memory stats do not have available memory. Use the modified qemu')
             newStats['stat-available-memory'] = newStats['stat-free-memory']
         return newStats
 
@@ -100,7 +100,7 @@ class Guest:
         try:
             libvirt_qemu.qemuMonitorCommand(self.domain, json.dumps(setPollIntervalCommand), 0)
         except Exception as e:
-            logging.exception("name: %s, uuid: %s, Unable to set poll interval",self.domName, self.uuid)
+            errorlogger.exception("name: %s, uuid: %s, Unable to set poll interval",self.domName, self.uuid)
 
 
     def getMemoryStats(self):
@@ -118,7 +118,7 @@ class Guest:
                 self.stats = self.toMb(out['return']['stats'])
             self.log('stats: %s', self.stats)
         except Exception as e:
-            logging.exception("name: %s, uuid: %s, Unable to get stats",self.domName, self.uuid)
+            errorlogger.exception("name: %s, uuid: %s, Unable to get stats",self.domName, self.uuid)
 
     def getPid(self):
         pid = open('/var/run/libvirt/qemu/'+self.domName+'.pid').read()
@@ -148,17 +148,17 @@ class Guest:
                     break
             return max(Rss/1024 - self.getQemuOverhead(), self.usedmem) # Mb
         except Exception as e:
-            logging.exception("name: %s, uuid: %s, Unable to get allocated memory",self.domName, self.uuid)
+            errorlogger.exception("name: %s, uuid: %s, Unable to get allocated memory",self.domName, self.uuid)
             # Fallback in case cannot get allocated memory
             return self.currentmem
 
     def balloon(self, target):
-        self.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
+        debuglogger.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
         self.domain.setMemory(int(target*1024))
-        self.log("Finished ballooning %s", "")
+        debuglogger.log("Finished ballooning %s", "")
 
     def log(self, msg, extra):
-        logging.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
+        debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
 
     def logStats(self):
         self.log('maxmem: %dMB', self.maxmem)
