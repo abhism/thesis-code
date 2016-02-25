@@ -7,34 +7,10 @@ import threading
 import time
 import pprint
 import logging
+import ConfigParser
 from host import *
 from guest import *
-
-#config = {}
-#
-#config["host"] = {
-#        "alpha": 0.1,
-#        "migration_threshold": 0.8,
-#        "slack_factor": 0,
-#        "design_parameter": 7,
-#        "window_size": 200000,
-#        "cache_factor": 0.1,
-#        "hypervisor_reserved": 500
-#        }
-#
-#config["guest"] = {
-#        "alpha": 0.1,
-#        "threshold": 0.95,
-#        "cache_factor": 0.1
-#        }
-
-# Memory in MB reserved for hypervisor. This memory should not be given to guests
-hypervisor_reserved = 500
-guest_reserved = 500
-
-guests = {}
-host = None
-
+from globals import *
 
 # Run the libvirt event loop
 def virEventLoopNativeRun():
@@ -81,10 +57,12 @@ def removeDomain(domain):
     logging.info("Removed a domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
 
 def calculateSoftIdle(guest):
+    guest_reserved = config.getint('monitor', 'guest_reserved')
     lower = max(guest.usedmem, guest_reserved)
     return max(guest.allocatedmem - lower, 0)
 
 def calculateHardIdle(guest):
+    guest_reserved = config.getint('monitor', 'guest_reserved')
     lower = max(guest.loadmem, guest_reserved)
     return max(guest.usedmem - lower, 0)
 
@@ -144,7 +122,8 @@ def monitor():
             softIdle[uuid] = calculateSoftIdle(guest)
             hardIdle[uuid] = calculateHardIdle(guest)
             # add 10% more memory when guest is overloaded
-            if guest.avgUsed > 0.8*guest.currentmem and guest.currentActualmem < guest.maxmem:
+            expansion_thresh = config.getfloat('monitor', 'expansion_thresh')
+            if guest.avgUsed > expansion_thresh*guest.currentmem and guest.currentActualmem < guest.maxmem:
                 needy[uuid] = min(0.1*guest.maxmem,guest.maxmem-guest.currentActualmem)
                 guest.log("Is needy, need: %dMB", needy[uuid])
                 extraMemory += needy[uuid]
@@ -278,6 +257,17 @@ def monitor():
 
 
 def main():
+    global config
+    global host
+    global guests
+
+    # read config
+    try:
+        config.read("config.ini")
+    except Exception as e:
+        logging.exception('Cannot read config, Exiting!')
+        sys.exit(1)
+
     # Set up logger
     logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)s: %(message)s', level=logging.DEBUG)
     logging.info('Monitoring started!')
@@ -324,13 +314,11 @@ def main():
     # Main montioring loop
     while True:
         try:
-            #logging.info("***************************************")
             logging.info("****Starting new round of monitoring***")
-            #logging.info("***************************************")
             monitor()
         except Exception as e:
             logging.exception('An exception occured in monitoring')
-        time.sleep(2)
+        time.sleep(config.getint('monitor', 'time'))
 
 
 if __name__ == "__main__":

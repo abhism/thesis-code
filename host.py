@@ -5,12 +5,13 @@ import math
 from collections import deque
 import numpy
 import time
-import etcd
 import os
 import logging
+import etcd
+from globals import *
+
 
 PAGESIZE = os.sysconf("SC_PAGE_SIZE") / 1024 #KiB
-hypervisor_reserved = 500
 
 class RunningStats:
     windowSize = 200000
@@ -59,7 +60,7 @@ class Host:
     mu = 0
 
     # threshold for migration
-    thresh = 0.8
+    thresh = 1
     totalmem = -1
 
     usedmem = -1
@@ -80,6 +81,7 @@ class Host:
 
     def __init__(self, conn):
         self.conn = conn
+        self.thresh = config.getfloat('migration', 'migration_thresh')
         stats = self.getMemoryStats()
         self.totalmem = stats['total']
         self.usedmem = stats['total'] - stats['free']
@@ -88,14 +90,17 @@ class Host:
         self.std = RunningStats(self.loadmem)
 
         #etcd
-        #self.etcdClient = etcd.Client(port=2379)
-        #self.updateEtcd()
+        if config.getboolean('etcd', 'enabled'):
+            host = config.get('etcd', 'host')
+            port = config.get('etcd', 'port') #default id 2379
+            self.etcdClient = etcd.Client(host=host, port=port)
+            self.updateEtcd()
 
 
     def updateEtcd(self):
-        #self.etcdClient.write('/'+self.hostName+'/totalmem', self.totalmem)
-        #self.etcdClient.write('/'+self.hostName+'/loadmem', self.mu)
-        pass
+        if config.getboolean('etcd', 'enabled'):
+            self.etcdClient.write('/'+self.hostName+'/totalmem', self.totalmem)
+            self.etcdClient.write('/'+self.hostName+'/loadmem', self.mu)
 
 
     def getMemoryStats(self):
@@ -113,6 +118,7 @@ class Host:
     # get used memory form statistics
     # TODO: find a way to use swap memory in loadmem too
     def getLoadMem(self, stats, idleMemory):
+        hypervisor_reserved = config.getint('monitor', 'hypervisor_reserved')
         vmLoad = self.getVMLoad()
         hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
@@ -148,6 +154,9 @@ class Host:
             self.d = 0
             if(self.mu > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
+                if config.getboolean('migration', 'enabled'):
+                    # migrate here
+                    pass
 
     def checkCpu(self):
         pass
