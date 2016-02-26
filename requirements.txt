@@ -1,0 +1,4 @@
+python-etcd==0.4.3
+numpy==1.9.1
+python-novaclient==2.22.0
+python-keystoneclient==1.2.0
