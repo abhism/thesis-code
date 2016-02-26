@@ -51,26 +51,28 @@ if config.getboolean('nova', 'enabled'):
     from keystoneclient.v3 import client
     auth_url = config.get('nova', 'auth_url')
     password = config.get('nova', 'demo_password')
-
+    debuglogger.debug('started to authorize for demo user')
     auth_demo = v3.Password(auth_url=auth_url,
                        username='demo',
                        password=password,
                        project_domain_name='defualt',
                        project_name='demo',
                        user_domain_name='default')
-
+    debuglogger.debug('Authorized demo!')
     sess_demo = session.Session(auth=auth_demo)
     keystone_demo = client.Client(session=sess_demo)
 
 
     password = config.get('nova', 'admin_password')
+
+    debuglogger.debug('started to authorize for admin user')
     auth_admin= v3.Password(auth_url=auth_url,
                        username='admin',
                        password=password,
                        project_domain_name='defualt',
                        project_name='admin',
                        user_domain_name='default')
-
+    debuglogger.debug('Authorized admin!')
     sess_admin= session.Session(auth=auth_admin)
     keystone_admin= client.Client(session=sess_admin)
 

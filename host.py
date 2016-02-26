@@ -88,8 +88,8 @@ class Host:
 
     def updateEtcd(self):
         if config.getboolean('etcd', 'enabled'):
-            etcdClient.write('/'+hostName+'/totalmem', self.totalmem)
-            etcdClient.write('/'+hostName+'/loadmem', self.mu)
+            etcdClient.write('/'+hostname+'/totalmem', self.totalmem)
+            etcdClient.write('/'+hostname+'/loadmem', self.mu)
 
 
     def getMemoryStats(self):
