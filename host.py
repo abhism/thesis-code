@@ -6,7 +6,7 @@ from collections import deque
 import numpy
 import time
 import os
-import etcd
+import migration
 from globals import *
 
 
@@ -75,9 +75,6 @@ class Host:
     #the design parameter
     h = 7
 
-    # TODO: This is to be replaced with the name nova uses to identify the compute nodes
-    hostName = "someRandomValue"
-
     def __init__(self, conn):
         self.conn = conn
         self.thresh = config.getfloat('migration', 'migration_thresh')
@@ -87,19 +84,12 @@ class Host:
         self.loadmem = self.getLoadMem(stats, 0)
         self.mu = self.loadmem
         self.std = RunningStats(self.loadmem)
-
-        #etcd
-        if config.getboolean('etcd', 'enabled'):
-            host = config.get('etcd', 'host')
-            port = config.get('etcd', 'port') #default id 2379
-            self.etcdClient = etcd.Client(host=host, port=port)
-            self.updateEtcd()
-
+        self.updateEtcd()
 
     def updateEtcd(self):
         if config.getboolean('etcd', 'enabled'):
-            self.etcdClient.write('/'+self.hostName+'/totalmem', self.totalmem)
-            self.etcdClient.write('/'+self.hostName+'/loadmem', self.mu)
+            etcdClient.write('/'+hostName+'/totalmem', self.totalmem)
+            etcdClient.write('/'+hostName+'/loadmem', self.mu)
 
 
     def getMemoryStats(self):
@@ -153,8 +143,9 @@ class Host:
             self.d = 0
             if(self.mu > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
-                if config.getboolean('migration', 'enabled'):
+                if config.getboolean('migration', 'enabled') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     # migrate here
+                    migration.handle()
                     pass
 
     def checkCpu(self):
