@@ -48,13 +48,13 @@ def domainLifecycleCallback(conn, domain, event, detail, opaque):
 def addNewDomain(domain):
     global guests
     guests[domain.UUIDString()] = Guest(domain)
-    logging.info("Added a new domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
+    debuglogger.info("Added a new domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
 
 
 def removeDomain(domain):
     global guests
     del guests[domain.UUIDString()]
-    logging.info("Removed a domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
+    debuglogger.info("Removed a domain name: %s, uuid: %s ",domain.name(), domain.UUIDString())
 
 def calculateSoftIdle(guest):
     guest_reserved = config.getint('monitor', 'guest_reserved')
@@ -113,7 +113,7 @@ def monitor():
 
         assert uuid == guest.uuid
 
-        logging.debug('Monitoring guest name: %s, uuid: %s', guest.domName, uuid)
+        debuglogger.debug('Monitoring guest name: %s, uuid: %s', guest.domName, uuid)
         try:
             guest.monitor()
             totalGuestMemory += guest.maxmem
@@ -137,9 +137,9 @@ def monitor():
         except:
             errorlogger.exception('Unable to monitor guest name: %s, uuid: %s ',guest.domName, uuid)
 
-    logging.debug("Total soft idle memory: %dMB", softIdleMemory)
-    logging.debug("Total hard idle memory: %dMB", hardIdleMemory)
-    logging.debug("Extra Memory Required: %dMB", extraMemory)
+    debuglogger.debug("Total soft idle memory: %dMB", softIdleMemory)
+    debuglogger.debug("Total hard idle memory: %dMB", hardIdleMemory)
+    debuglogger.debug("Extra Memory Required: %dMB", extraMemory)
     # Monitor the host
     try:
     # Idle Memory  should be subtracted from guest used memory.
@@ -153,7 +153,7 @@ def monitor():
 
     # If demands can be satisfied by soft reclamation
     if host.loadmem + hardIdleMemory + extraMemory <= host.totalmem:
-        logging.debug("Demands can be satisfied by soft reclamation")
+        debuglogger.debug("Demands can be satisfied by soft reclamation")
         pot = calculatePot(host, softIdleMemory + hardIdleMemory)
         for uuid in needy.keys():
             needyGuest = guests[uuid]
@@ -166,14 +166,14 @@ def monitor():
                 pot += softIdleGuestMem
                 del softIdle[idleUuid]
             if(pot-need < -100):
-                logging.warn("More than 100MB deficit in pot. check the algo.")
+                errorlogger.warn("More than 100MB deficit in pot. check the algo.")
             else:
                 needyGuest.balloon(needyGuest.currentActualmem + need )
                 pot -= need
 
     # If hard reclamation required
     elif host.loadmem + extraMemory < host.totalmem:
-        logging.debug("Demands need hard reclamation")
+        debuglogger.debug("Demands need hard reclamation")
         # pot represents the memory free to give away without ballooning
         # more memory can be added to pot buy ballooning down any guest
         # ballooning up a guest takes away memory from the pot
@@ -197,13 +197,13 @@ def monitor():
                 del softIdle[idleUuid]
                 del hardIdle[idleUuid]
             if(pot-need < -100):
-                logging.warn("More than 100MB deficit in pot. check the algo.")
+                errorlogger.warn("More than 100MB deficit in pot. check the algo.")
             else:
                 needyGuest.balloon(neeedyGuest.currentActualmem + need)
                 pot -= need
     # If not enough memory is left to give away
     else:
-        logging.debug("Overload, calculate entitlement")
+        debuglogger.debug("Overload, calculate entitlement")
         # calcualte the entitlement of each guest
         idleMemory = 0
         idle = {}
@@ -250,7 +250,7 @@ def monitor():
                 del idle[excessUuid]
                 del excessUsed[excessUuid]
             if(pot-need < -100):
-                logging.warn("More than 100MB deficit in pot. check the algo.")
+                errorlogger.warn("More than 100MB deficit in pot. check the algo.")
             else:
                 needyGuest.balloon(neeedyGuest.currentActualmem + need)
                 pot -= need
@@ -261,12 +261,6 @@ def main():
     global host
     global guests
 
-    # read config
-    try:
-        config.read("config.ini")
-    except Exception as e:
-        errorlogger.exception('Cannot read config, Exiting!')
-        sys.exit(1)
 
     # Set up logger
     #logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)8s: %(message)s', level=logging.DEBUG)

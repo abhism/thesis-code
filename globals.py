@@ -16,7 +16,7 @@ debuglogger.addHandler(fh)
 
 
 errorlogger = logging.getLogger('error')
-errorlogger.setLevel(logging.ERROR)
+errorlogger.setLevel(logging.WARN)
 fh = logging.FileHandler('monitor_error.log')
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s: %(levelname)8s: %(message)s')
