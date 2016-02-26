@@ -83,7 +83,7 @@ etcdClient = None
 if config.getboolean('etcd', 'enabled'):
     import etcd
     host = config.get('etcd', 'host')
-    port = config.get('etcd', 'port') #default id 2379
+    port = config.getint('etcd', 'port') #default id 2379
     etcdClient = etcd.Client(host=host, port=port)
 
 
