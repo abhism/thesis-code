@@ -2,7 +2,6 @@ import os
 import libvirt
 import libvirt_qemu
 import json
-import subprocess
 from globals import *
 
 PAGESIZE = os.sysconf("SC_PAGE_SIZE") / 1024 #KiB
@@ -140,11 +139,12 @@ class Guest:
     def getAllocatedMem(self):
         try:
             Rss = self.usedmem
-            mmaps = subprocess.check_output(['pmap','-X',self.pid]).splitlines()[2:]
-            for mmap in mmaps:
-                splits = mmap.split()
-                if int(splits[5]) == self.domain.maxMemory():
-                    Rss = int(splits[6])
+            f = open('/proc/'+self.pid+'/smaps')
+            lines = f.readlines()
+            for index, l in enumerate(lines):
+                splits = l.split()
+                if len(splits) > 2 and splits[0] == 'Size:' and int(splits[1]) == self.domain.maxMemory():
+                    Rss = int(lines[index+1].split()[1])
                     break
             return max(Rss/1024 - self.getQemuOverhead(), self.usedmem) # Mb
         except Exception as e:
@@ -153,9 +153,9 @@ class Guest:
             return self.currentmem
 
     def balloon(self, target):
-        debuglogger.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
+        self.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
         self.domain.setMemory(int(target*1024))
-        debuglogger.log("Finished ballooning %s", "")
+        self.log("Finished ballooning %s", "")
 
     def log(self, msg, extra):
         debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
