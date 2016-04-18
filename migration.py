@@ -38,7 +38,7 @@ def select_dest(hosts,hostname, vmSize):
         key4 = i + '/totalmem'
         mem_used = float(etcdClient.read(key2).value)
         mem_total = float(etcdClient.read(key4).value)
-        if ((mem_used+vm_mem)>mem_total):
+        if ((mem_used+vmSize)>mem_total):
                 continue
         mem = vmSize + mem_used
         cost = pow(len(hosts),(mem/mem_total))

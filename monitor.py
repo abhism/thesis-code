@@ -72,6 +72,10 @@ def calculatePot(host, idleMemory):
 def monitor():
     global guests
     global host
+
+    # steal time of all guests
+    stealTime = {}
+
     # guests with idle memory to give away
     softIdle = {}
     hardIdle = {}
@@ -116,6 +120,9 @@ def monitor():
         debuglogger.debug('Monitoring guest name: %s, uuid: %s', guest.domName, uuid)
         try:
             guest.monitor()
+
+            stealTime[uuid] = guest.avgSteal
+
             totalGuestMemory += guest.maxmem
 
             # Calculate Idle memory and ensure that currentmem does not fall below guest_reserved

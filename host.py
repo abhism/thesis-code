@@ -75,8 +75,17 @@ class Host:
     #the design parameter
     h = 7
 
+    prevTotalTime = 0
+
+    prevBusyTime = 0
+
+    cpuUsage = 0
+
+    cpuCores = 0
+
     def __init__(self, conn):
         self.conn = conn
+        self.cpuCores = self.conn.getCPUMap(0)[0]
         self.thresh = config.getfloat('migration', 'migration_thresh')
         stats = self.getMemoryStats()
         self.totalmem = stats['total']
@@ -86,10 +95,13 @@ class Host:
         self.std = RunningStats(self.loadmem)
         self.updateEtcd()
 
+
     def updateEtcd(self):
         if config.getboolean('etcd', 'enabled'):
             etcdClient.write('/'+hostname+'/totalmem', self.totalmem)
             etcdClient.write('/'+hostname+'/loadmem', self.mu)
+            etcdClient.write('/'+hostname+'/cpucores',self.cpuCores)
+            etcdClient.write('/'+hostname+'/usedcpu',self.cpuUsage)
 
 
     def getMemoryStats(self):
@@ -106,6 +118,9 @@ class Host:
 
     # get used memory form statistics
     # TODO: find a way to use swap memory in loadmem too
+    # TODO: does taking away all of the available memory make sense?
+    # Or should there be a cap on the maximum amount of memory that can be taken
+    # away in a step, and also increased in a step?
     def getLoadMem(self, stats, idleMemory):
         hypervisor_reserved = config.getint('monitor', 'hypervisor_reserved')
         vmLoad = self.getVMLoad()
@@ -149,9 +164,16 @@ class Host:
                     pass
 
     def checkCpu(self):
-        pass
+        stats = self.conn.getCPUStats(libvirt.VIR_NODE_CPU_STATS_ALL_CPUS, 0)
+        totalTime = stats['kernel'] + stats['user'] + stats['idle'] + stats['iowait']
+        busyTime = stats['kernel'] + stats['user']
+        if self.prevBusyTime !=0 and (totalTime - self.prevTotalTime) !=0:
+            self.cpuUsage = (busyTime - self.prevBusyTime)*100/float(totalTime - self.prevTotalTime)
+        self.prevTotalTime = totalTime
+        self.prevBusyTime = busyTime
 
     def logStats(self, H):
+        debuglogger.debug('Host cpuUsage: %f', self.cpuUsage)
         debuglogger.debug('Host totalmem: %dMB', self.totalmem)
         debuglogger.debug('Host usedmem: %dMB', self.usedmem)
         debuglogger.debug('Host loadmem: %dMB', self.loadmem)

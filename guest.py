@@ -16,7 +16,7 @@ class Guest:
 
     pid = -1
 
-    #vCpuPid should be an instance varibale
+    # vCpuPid should be an instance varibale
     # declaring it here will create a class varibale, hence declaring it inside init
     # refer to http://stackoverflow.com/questions/8701500/python-class-instance-variables-and-class-variables
     #vCpuPid = []
@@ -44,9 +44,20 @@ class Guest:
 
     thresh = 0.95
 
+    # this should be 0, not -1 like others
     stealTime = 0
 
+    busyTime = 0
+
+    avgSteal = -1
+
+    avgBusy = -1
+
+    avgCpuDemand = -1
+
     prevWaitTime = 0
+
+    prevBusyTime = 0
 
     prevTotalTime = 0
 
@@ -59,7 +70,9 @@ class Guest:
         self.pid = self.getPid()
         self.getvCpuPid()
 
-        self.getStealTime()
+        self.avgSteal, self.avgBusy = self.getCpuStats()
+        self.avgCpuDemand = self.avgBusy*(1+self.avgSteal/100)
+
         self.setPollInterval()
         self.maxmem = self.domain.maxMemory()/1024
         self.getMemoryStats()
@@ -74,8 +87,12 @@ class Guest:
         self.logStats()
 
     def monitor(self):
-        # calculate steal time
-        self.getStealTime()
+        # calculate average steal time
+        steal, busy = self.getCpuStats()
+        self.avgSteal = self.alpha*steal + (1-self.alpha)*self.avgSteal
+        self.avgBusy = self.alpha*busy + (1-self.alpha)*self.avgBusy
+        # cpu demad is scaled value of actual cpu usage
+        self.avgCpuDemand = self.avgBusy*(1+self.avgSteal/100)
 
         # calculate used memory
         self.getMemoryStats()
@@ -154,14 +171,17 @@ class Guest:
             errorlogger.exception("name: %s, uuid: %s, Unable to get vCpuPid",
                 self.domName, self.uuid)
 
-    def getStealTime(self):
-        # waitTime is in nano seconds
+    def getCpuStats(self):
+        # waitTime and busytime are in nano seconds
         waitTime = 0
+        busyTime = 0
         totalTime = 0
         try:
             for vCpu in self.vCpuPid:
                 f = open('/proc/%s/task/%s/schedstat' % (self.pid, vCpu))
-                waitTime += int(f.read().split()[1])
+                v = f.read().split()
+                waitTime += int(v[1])
+                busyTime += int(v[0])
                 f.close()
         except Exception as e:
             errorlogger.exception("name: %s, uuid: %s, Unable to get wait time",
@@ -179,10 +199,14 @@ class Guest:
                 self.domName, self.uuid)
         if self.prevWaitTime !=0 and (totalTime-self.prevTotalTime) > 0:
             self.stealTime = (waitTime-self.prevWaitTime)/float(totalTime-self.prevTotalTime)
-            # make steal time into percentage
+            self.busyTime = (busyTime-self.prevBusyTime)/float(totalTime-self.prevTotalTime)
+            # make steal and time into percentage
             self.stealTime = self.stealTime/10000000
+            self.busyTime = self.busyTime/10000000
         self.prevWaitTime = waitTime
+        self.prevBusyTime = busyTime
         self.prevTotalTime = totalTime
+        return (self.stealTime, self.busyTime)
 
     def getPid(self):
         pid = open('/var/run/libvirt/qemu/'+self.domName+'.pid').read()
@@ -226,7 +250,9 @@ class Guest:
         debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
 
     def logStats(self):
+        self.log('busytime: %f', self.busyTime)
         self.log('stealtime: %f', self.stealTime)
+        self.log('avgCpuDemand: %f', self.avgCpuDemand)
         self.log('maxmem: %dMB', self.maxmem)
         self.log('currentmem: %dMB', self.currentmem)
         self.log('allocatedmem: %dMB', self.allocatedmem)
