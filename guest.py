@@ -16,6 +16,11 @@ class Guest:
 
     pid = -1
 
+    #vCpuPid should be an instance varibale
+    # declaring it here will create a class varibale, hence declaring it inside init
+    # refer to http://stackoverflow.com/questions/8701500/python-class-instance-variables-and-class-variables
+    #vCpuPid = []
+
     domname = ""
 
     maxmem = -1
@@ -39,12 +44,22 @@ class Guest:
 
     thresh = 0.95
 
+    stealTime = 0
+
+    prevWaitTime = 0
+
+    prevTotalTime = 0
+
     def __init__(self, libvirtDomain):
+        self.vCpuPid = []
+
         self.domain = libvirtDomain
         self.uuid = libvirtDomain.UUIDString()
         self.domName = libvirtDomain.name()
         self.pid = self.getPid()
+        self.getvCpuPid()
 
+        self.getStealTime()
         self.setPollInterval()
         self.maxmem = self.domain.maxMemory()/1024
         self.getMemoryStats()
@@ -59,6 +74,9 @@ class Guest:
         self.logStats()
 
     def monitor(self):
+        # calculate steal time
+        self.getStealTime()
+
         # calculate used memory
         self.getMemoryStats()
         self.maxmem = self.domain.maxMemory()/1024
@@ -97,9 +115,11 @@ class Guest:
                     }
                 }
         try:
-            libvirt_qemu.qemuMonitorCommand(self.domain, json.dumps(setPollIntervalCommand), 0)
+            libvirt_qemu.qemuMonitorCommand(self.domain,
+                json.dumps(setPollIntervalCommand), 0)
         except Exception as e:
-            errorlogger.exception("name: %s, uuid: %s, Unable to set poll interval",self.domName, self.uuid)
+            errorlogger.exception("name: %s, uuid: %s, Unable to set poll interval",
+                self.domName, self.uuid)
 
 
     def getMemoryStats(self):
@@ -111,13 +131,58 @@ class Guest:
                     }
                 }
         try:
-            out = libvirt_qemu.qemuMonitorCommand(self.domain, json.dumps(memStatsCommand), 0)
+            out = libvirt_qemu.qemuMonitorCommand(self.domain,
+                json.dumps(memStatsCommand), 0)
             out = json.loads(out)
             if self.timestamp < out['return']['last-update']:
                 self.stats = self.toMb(out['return']['stats'])
             self.log('stats: %s', self.stats)
         except Exception as e:
-            errorlogger.exception("name: %s, uuid: %s, Unable to get stats",self.domName, self.uuid)
+            errorlogger.exception("name: %s, uuid: %s, Unable to get stats",
+                self.domName, self.uuid)
+
+    def getvCpuPid(self):
+        command = {
+            'execute': 'query-cpus',
+        }
+        try:
+            out = libvirt_qemu.qemuMonitorCommand(self.domain, json.dumps(command), 0)
+            out = json.loads(out)
+            for cpu in out['return']:
+                self.vCpuPid.append(str(cpu['thread_id']))
+        except Exception as e:
+            errorlogger.exception("name: %s, uuid: %s, Unable to get vCpuPid",
+                self.domName, self.uuid)
+
+    def getStealTime(self):
+        # waitTime is in nano seconds
+        waitTime = 0
+        totalTime = 0
+        try:
+            for vCpu in self.vCpuPid:
+                f = open('/proc/%s/task/%s/schedstat' % (self.pid, vCpu))
+                waitTime += int(f.read().split()[1])
+                f.close()
+        except Exception as e:
+            errorlogger.exception("name: %s, uuid: %s, Unable to get wait time",
+                self.domName, self.uuid)
+        try:
+            with open('/proc/stat') as stat:
+                values = stat.read().split('\n')[0].split()
+                # totaltime is in seconds
+                # assumes that 1 jiffy is 1/100 of a second
+                # TODO: better way would be to take that value from sysconf
+                totalTime = ((int(values[1]) + int(values[3]) + int(values[4]) +
+                    int(values[5]) + int(values[6]) + int(values[7]))/float(100))
+        except Exception as e:
+            errorlogger.exception("name: %s, uuid: %s, Unable to get total time",
+                self.domName, self.uuid)
+        if self.prevWaitTime !=0 and (totalTime-self.prevTotalTime) > 0:
+            self.stealTime = (waitTime-self.prevWaitTime)/float(totalTime-self.prevTotalTime)
+            # make steal time into percentage
+            self.stealTime = self.stealTime/10000000
+        self.prevWaitTime = waitTime
+        self.prevTotalTime = totalTime
 
     def getPid(self):
         pid = open('/var/run/libvirt/qemu/'+self.domName+'.pid').read()
@@ -161,11 +226,10 @@ class Guest:
         debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
 
     def logStats(self):
+        self.log('stealtime: %f', self.stealTime)
         self.log('maxmem: %dMB', self.maxmem)
         self.log('currentmem: %dMB', self.currentmem)
         self.log('allocatedmem: %dMB', self.allocatedmem)
         self.log('usedmem: %dMB', self.usedmem)
         self.log('loadmem: %dMB', self.loadmem)
         self.log('avgUsed: %dMB', self.avgUsed)
-
-
