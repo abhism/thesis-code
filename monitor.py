@@ -153,7 +153,7 @@ def monitor():
     # i.e. It should not count towards host load.
     # The result of this is that a host is only migrated when its
     # requirements cannot be satisfied after hard ballooning of all the other guests.
-       host.monitor(softIdleMemory + hardIdleMemory)
+       host.monitor(softIdleMemory + hardIdleMemory, stealTime)
         # This will try to migrate away guests of there is a overload
     except Exception as e:
         errorlogger.exception('Unable to monitor host')

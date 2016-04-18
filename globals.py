@@ -6,6 +6,9 @@ guests = {}
 
 host = None
 
+#whether a guest is already under migration
+migrationFlag = False
+
 #logging stuff
 
 #create the log direcotry
