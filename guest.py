@@ -108,7 +108,11 @@ class Guest:
         return self.avgUsed
 
     def getLoadMem(self):
-        return self.stats['stat-total-memory'] - self.stats['stat-available-memory']
+        # reserving around 500MB of memory
+        if self.stats['stat-available-memory'] > 500:
+            return self.stats['stat-total-memory'] - (self.stats['stat-available-memory'] - 500)
+        else
+            return self.stats['stats-total-memory']
 
     # Convert the stats to MB
     def toMb(self, stats):
@@ -153,7 +157,7 @@ class Guest:
             out = json.loads(out)
             if self.timestamp < out['return']['last-update']:
                 self.stats = self.toMb(out['return']['stats'])
-            self.log('stats: %s', self.stats)
+            #self.log('stats: %s', self.stats)
         except Exception as e:
             errorlogger.exception("name: %s, uuid: %s, Unable to get stats",
                 self.domName, self.uuid)
@@ -251,6 +255,7 @@ class Guest:
 
     def logStats(self):
         self.log('busytime: %f', self.busyTime)
+        self.log('avgBusytime: %f', self.avgBusy)
         self.log('stealtime: %f', self.stealTime)
         self.log('avgCpuDemand: %f', self.avgCpuDemand)
         self.log('maxmem: %dMB', self.maxmem)

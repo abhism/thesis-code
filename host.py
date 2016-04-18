@@ -126,7 +126,7 @@ class Host:
         newStats = {}
         for key in stats.keys():
             newStats[key] = round(stats[key]/1024)
-        debuglogger.debug("Stats: %s", str(newStats))
+        #debuglogger.debug("Stats: %s", str(newStats))
         return newStats
 
     # get used memory form statistics
