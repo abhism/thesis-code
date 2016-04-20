@@ -10,7 +10,8 @@ host = None
 migrationFlag = False
 
 #logging stuff
-
+hostLog = {}
+guestLog = {}
 #create the log direcotry
 if not os.path.exists('log'):
     os.makedirs('log')

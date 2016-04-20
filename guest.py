@@ -21,7 +21,7 @@ class Guest:
     # refer to http://stackoverflow.com/questions/8701500/python-class-instance-variables-and-class-variables
     #vCpuPid = []
 
-    domname = ""
+    domName = ""
 
     maxmem = -1
 
@@ -111,8 +111,8 @@ class Guest:
         # reserving around 500MB of memory
         if self.stats['stat-available-memory'] > 500:
             return self.stats['stat-total-memory'] - (self.stats['stat-available-memory'] - 500)
-        else
-            return self.stats['stats-total-memory']
+        else:
+            return self.stats['stat-total-memory']
 
     # Convert the stats to MB
     def toMb(self, stats):
@@ -254,6 +254,19 @@ class Guest:
         debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
 
     def logStats(self):
+        global guestLog
+        guestLog[self.domName] = {}
+        guestLog[self.domName]['guestmaxmem'] = self.maxmem
+        guestLog[self.domName]['guestcurrentmem'] = self.currentmem
+        guestLog[self.domName]['guestallocatedmem'] = self.allocatedmem
+        guestLog[self.domName]['guestusedmem'] = self.usedmem
+        guestLog[self.domName]['guestloadmem'] = self.loadmem
+        guestLog[self.domName]['guestavgusedmem'] = self.avgUsed
+        guestLog[self.domName]['gueststealTime'] = self.stealTime
+        guestLog[self.domName]['guestbusytime'] = self.busyTime
+        guestLog[self.domName]['guestavgBusytime'] = self.avgBusy
+        guestLog[self.domName]['guestavgCpuDemand'] = self.avgCpuDemand
+
         self.log('busytime: %f', self.busyTime)
         self.log('avgBusytime: %f', self.avgBusy)
         self.log('stealtime: %f', self.stealTime)

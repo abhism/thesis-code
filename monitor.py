@@ -8,6 +8,7 @@ import time
 import pprint
 import logging
 import ConfigParser
+import requests
 from host import *
 from guest import *
 from globals import *
@@ -262,6 +263,28 @@ def monitor():
                 needyGuest.balloon(neeedyGuest.currentActualmem + need)
                 pot -= need
 
+def sendLog():
+    global hostLog
+    global guestLog
+    if config.getboolean('influx','enabled'):
+        db = config.get('influx','db')
+        payload = ""
+        for key in hostLog.keys():
+            payload = payload + (key+',host='+hostname+' value='+str(hostLog[key])+'\n')
+        for guest in guestLog.keys():
+            stat = guestLog[guest]
+            for key in stat.keys():
+                payload = payload + (key+',guest='+guest+',host='+hostname+' value='+str(stat[key])+'\n')
+            # this metric is used to track migration
+            n = hostname[-1:]
+            try:
+                n = int(n)
+            except:
+                n = ord(n)
+            payload = payload + ('host,guest='+guest+' value='+str(n)+'\n')
+        resp = requests.post('http://controller:8086/write?db='+db, data=payload)
+        if resp.status_code != 204:
+            debuglogger.warn('Unable to send request to influx db %s', resp.content)
 
 def main():
     global config
@@ -324,6 +347,7 @@ def main():
             monitor()
         except Exception as e:
             errorlogger.exception('An exception occured in monitoring')
+        sendLog()
         time.sleep(config.getint('monitor', 'time'))
 
 

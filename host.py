@@ -138,6 +138,8 @@ class Host:
         hypervisor_reserved = config.getint('monitor', 'hypervisor_reserved')
         vmLoad = self.getVMLoad()
         hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
+        global hostLog
+        hostLog['hypervisorLoad'] = hypervisorLoad
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
         hypervisor_extra = max(hypervisor_reserved-hypervisorLoad, 0)
         debuglogger.debug("Hypervisor Load is %dMB", hypervisorLoad)
@@ -223,6 +225,13 @@ class Host:
 
 
     def logStats(self):
+        global hostLog
+        hostLog['cpu'] = self.cpuUsage
+        hostLog['avgCpu'] = self.muCpu
+        hostLog['usedmem'] = self.usedmem
+        hostLog['loadmem'] = self.loadmem
+        hostLog['avgloadmem'] = self.muMem
+
         debuglogger.debug('Host cpuUsage: %f', self.cpuUsage)
         debuglogger.debug('Host totalmem: %dMB', self.totalmem)
         debuglogger.debug('Host usedmem: %dMB', self.usedmem)
@@ -242,6 +251,8 @@ class Host:
                        * PAGESIZE)
             memUsed += Rss/1024 # Mb
         debuglogger.debug("VM Load is: %dMB", memUsed)
+        global hostLog
+        hostLog['vmload'] = memUsed
         return memUsed
 
     def getAvailableMemory(self):
