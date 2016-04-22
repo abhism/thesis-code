@@ -268,6 +268,7 @@ def sendLog():
     global guestLog
     if config.getboolean('influx','enabled'):
         db = config.get('influx','db')
+        host = config.get('influx','host')
         payload = ""
         for key in hostLog.keys():
             payload = payload + (key+',host='+hostname+' value='+str(hostLog[key])+'\n')
@@ -282,7 +283,7 @@ def sendLog():
             except:
                 n = ord(n)
             payload = payload + ('host,guest='+guest+' value='+str(n)+'\n')
-        resp = requests.post('http://controller:8086/write?db='+db, data=payload)
+        resp = requests.post('http://'+host+'/write?db='+db, data=payload)
         if resp.status_code != 204:
             debuglogger.warn('Unable to send request to influx db %s', resp.content)
 
