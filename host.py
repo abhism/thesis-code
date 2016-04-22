@@ -241,20 +241,33 @@ class Host:
         #debuglogger.debug('Host H: %f', H)
 
     def getVMLoad(self):
-        pids = []
-        memUsed = 0
-        for fil in os.listdir('/var/run/libvirt/qemu/'):
-            if fil.endswith('.pid'):
-                pids.append(open('/var/run/libvirt/qemu/'+fil).read())
-        for pid in pids:
-            Rss = (int(open('/proc/'+pid+'/statm').readline().split()[1])
-                       * PAGESIZE)
-            memUsed += Rss/1024 # Mb
-        debuglogger.debug("VM Load is: %dMB", memUsed)
-        global hostLog
-        hostLog['vmload'] = memUsed
-        return memUsed
+        try:
+            pids = []
+            memUsed = 0
+            for fil in os.listdir('/var/run/libvirt/qemu/'):
+                if fil.endswith('.pid'):
+                    pids.append(open('/var/run/libvirt/qemu/'+fil).read())
+            for pid in pids:
+                # sometimes, the pid file exists even if the VM is not running
+                # therefore ignore the pid if unable to open statm file.
+                try:
+                    Rss = (int(open('/proc/'+pid+'/statm').readline().split()[1])
+                               * PAGESIZE)
+                    memUsed += Rss/1024 # Mb
+                except:
+                    continue
+            debuglogger.debug("VM Load is: %dMB", memUsed)
+            global hostLog
+            hostLog['vmload'] = memUsed
+            return memUsed
+        except:
+            errorlogger.exception("Unable to get VM Load")
+            return memUsed
 
     def getAvailableMemory(self):
-        line = open('/proc/meminfo').readlines()[2]
-        return int(line.split()[1])/1024
+        try:
+            line = open('/proc/meminfo').readlines()[2]
+            return int(line.split()[1])/1024
+        except:
+            errorlogger.exception("Unable to get Available memory")
+            return 0

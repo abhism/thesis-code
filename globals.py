@@ -91,13 +91,15 @@ if config.getboolean('nova', 'enabled'):
     nova_admin = client.Client(3, session=keystone_admin.session)
 
 #etcd stuff
-etcdClient = None
-if config.getboolean('etcd', 'enabled'):
-    import etcd
-    host = config.get('etcd', 'host')
-    port = config.getint('etcd', 'port') #default id 2379
-    etcdClient = etcd.Client(host=host, port=port)
-
+try:
+    etcdClient = None
+    if config.getboolean('etcd', 'enabled'):
+        import etcd
+        host = config.get('etcd', 'host')
+        port = config.getint('etcd', 'port') #default id 2379
+        etcdClient = etcd.Client(host=host, port=port)
+except:
+    errorlogger.exception("Unable to connect to etcd")
 
 import socket
 hostname = 'error'
