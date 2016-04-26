@@ -138,6 +138,7 @@ class Host:
         hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
         global hostLog
         hostLog['hypervisorLoad'] = hypervisorLoad
+        hostLog['idleMemory'] = idleMemory
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
         hypervisor_extra = max(hypervisor_reserved-hypervisorLoad, 0)
         debuglogger.debug("Hypervisor Load is %dMB", hypervisorLoad)

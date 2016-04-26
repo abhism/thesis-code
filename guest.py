@@ -188,8 +188,8 @@ class Guest:
                 waitTime += int(v[1])
                 busyTime += int(v[0])
                 f.close()
-            waitTime = waitTime/len(vCpuPid)
-            busyTime = busyTime/len(vCpuPid)
+            waitTime = waitTime/len(self.vCpuPid)
+            busyTime = busyTime/len(self.vCpuPid)
         except Exception as e:
             errorlogger.exception("name: %s, uuid: %s, Unable to get wait time",
                 self.domName, self.uuid)
