@@ -286,8 +286,8 @@ def sendLog():
         resp = requests.post('http://'+host+'/write?db='+db, data=payload)
         if resp.status_code != 204:
             debuglogger.warn('Unable to send request to influx db %s', resp.content)
-    hostLog = {}
-    guestLog = {}
+    hostLog.clear()
+    guestLog.clear()
 
 def main():
     global config
