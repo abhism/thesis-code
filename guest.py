@@ -251,9 +251,12 @@ class Guest:
             return self.currentmem
 
     def balloon(self, target):
-        self.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
-        self.domain.setMemory(int(target*1024))
-        self.log("Finished ballooning %s", "")
+        if config.getboolean('monitor', 'balloon'):
+            self.log("Started ballooning form %dMB to"+str(target)+"MB", self.currentmem)
+            self.domain.setMemory(int(target*1024))
+            self.log("Finished ballooning %s", "")
+        else:
+            self.log("Ballooning disabled in config. Unable to balloon %s", self.domName)
 
     def log(self, msg, extra):
         debuglogger.debug("name: %s, uuid: %s, "+msg,self.domName, self.uuid, extra)
