@@ -286,12 +286,14 @@ def sendLog():
         resp = requests.post('http://'+host+'/write?db='+db, data=payload)
         if resp.status_code != 204:
             debuglogger.warn('Unable to send request to influx db %s', resp.content)
+    hostLog = {}
+    guestLog = {}
 
 def main():
     global config
     global host
     global guests
-
+    global cpuCores
 
     # Set up logger
     #logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)8s: %(message)s', level=logging.DEBUG)
@@ -334,7 +336,7 @@ def main():
     except Exception as e:
         errorlogger.exception('Failed to register domain lifecycle events, Exiting')
 
-    global host
+    cpuCores = conn.getCPUMap(0)[0]
     host = Host(conn)
 
     for domain in doms:

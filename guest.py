@@ -176,6 +176,7 @@ class Guest:
                 self.domName, self.uuid)
 
     def getCpuStats(self):
+        global cpuCores
         # waitTime and busytime are in nano seconds
         waitTime = 0
         busyTime = 0
@@ -187,6 +188,8 @@ class Guest:
                 waitTime += int(v[1])
                 busyTime += int(v[0])
                 f.close()
+            waitTime = waitTime/len(vCpuPid)
+            busyTime = busyTime/len(vCpuPid)
         except Exception as e:
             errorlogger.exception("name: %s, uuid: %s, Unable to get wait time",
                 self.domName, self.uuid)
@@ -198,6 +201,8 @@ class Guest:
                 # TODO: better way would be to take that value from sysconf
                 totalTime = ((int(values[1]) + int(values[3]) + int(values[4]) +
                     int(values[5]) + int(values[6]) + int(values[7]))/float(100))
+                # Since there multiple cores and total time is sum of time on all cores
+                totalTime = totalTime / cpuCores
         except Exception as e:
             errorlogger.exception("name: %s, uuid: %s, Unable to get total time",
                 self.domName, self.uuid)

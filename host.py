@@ -86,14 +86,11 @@ class Host:
 
     cpuUsage = 0
 
-    cpuCores = 0
-
     # candidates for migration due to cpu load
     maybeMigrate = {}
 
     def __init__(self, conn):
         self.conn = conn
-        self.cpuCores = self.conn.getCPUMap(0)[0]
         self.thresh = config.getfloat('migration', 'migration_thresh')
         stats = self.getMemoryStats()
         self.totalmem = stats['total']
@@ -110,10 +107,11 @@ class Host:
 
 
     def updateEtcd(self):
+        global cpuCores
         if config.getboolean('etcd', 'enabled'):
             etcdClient.write('/'+hostname+'/totalmem', self.totalmem)
             etcdClient.write('/'+hostname+'/loadmem', self.muMem)
-            etcdClient.write('/'+hostname+'/cpucores',self.cpuCores)
+            etcdClient.write('/'+hostname+'/cpucores',cpuCores)
             etcdClient.write('/'+hostname+'/usedcpu',self.muCpu)
 
 

@@ -107,3 +107,6 @@ try:
     hostname = socket.gethostname()
 except Exception as e:
     errorlogger.exception('Could not determine hostname')
+
+# will be modified by the monitor.py, which gets it from libvirtConnection
+cpuCores = 8
