@@ -159,10 +159,24 @@ def monitor():
     except Exception as e:
         errorlogger.exception('Unable to monitor host')
 
+    # Pot represents the amount of memory freely availble for give away.
+    pot = calculatePot(host, softIdleMemory + hardIdleMemory)
+    # If 90% of the available memory is used, reclaim some memory
+    # This is required to prevent swapping
+    # TODO: use hard idle too here
+    if pot < 0.1*host.totalmem:
+        while pot < 0.2*host.totalmem and len(softIdle.keys()) > 0:
+            idleUuid = softIdle.keys()[0]
+            softIdleGuest = guests[idleUuid]
+            softIdleGuestMem = softIdle[idleUuid]
+            softIdleGuest.balloon(softIdleGuest.currentActualmem - softIdleGuestMem)
+            pot += softIdleGuestMem
+            del softIdle[idleUuid]
+
     # If demands can be satisfied by soft reclamation
     if host.loadmem + hardIdleMemory + extraMemory <= host.totalmem:
         debuglogger.debug("Demands can be satisfied by soft reclamation")
-        pot = calculatePot(host, softIdleMemory + hardIdleMemory)
+        #pot = calculatePot(host, softIdleMemory + hardIdleMemory)
         for uuid in needy.keys():
             needyGuest = guests[uuid]
             need = needy[uuid]
@@ -185,7 +199,7 @@ def monitor():
         # pot represents the memory free to give away without ballooning
         # more memory can be added to pot buy ballooning down any guest
         # ballooning up a guest takes away memory from the pot
-        pot = host.totalMem - host.allocatedmem
+        #pot = calculatePot(host, softIdleMemory + hardIdleMemory)
         needAfterSoft = extraMemory - softIdleMemory
         # take away proportional amount of memory from each idle guest
         for uuid in needy.keys():
@@ -242,7 +256,7 @@ def monitor():
                 idle[uuid] = softIdle[uuid] + hardIdle[uuid]
                 idleMemory += idle[uuid]
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
-        pot = calculatePot(host, idleMemory)
+        #pot = calculatePot(host, idleMemory)
         needAfterIdle = extraMemory - idleMemory
         for needyUuid in needy.keys():
             needyGuest = guests[needyUuid]
