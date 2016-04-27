@@ -164,8 +164,8 @@ def monitor():
     # If 90% of the available memory is used, reclaim some memory
     # This is required to prevent swapping
     # TODO: use hard idle too here
-    if pot < 0.1*host.totalmem:
-        while pot < 0.2*host.totalmem and len(softIdle.keys()) > 0:
+    if pot < 0.1*(host.totalmem - host.hypervisorLoad):
+        while pot < 0.2*(host.totalmem - host.hypervisorLoad) and len(softIdle.keys()) > 0:
             idleUuid = softIdle.keys()[0]
             softIdleGuest = guests[idleUuid]
             softIdleGuestMem = softIdle[idleUuid]

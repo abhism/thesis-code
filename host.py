@@ -86,6 +86,8 @@ class Host:
 
     cpuUsage = 0
 
+    hypervisorLoad = -1
+
     # candidates for migration due to cpu load
     maybeMigrate = {}
 
@@ -135,13 +137,13 @@ class Host:
     def getLoadMem(self, stats, idleMemory):
         hypervisor_reserved = config.getint('monitor', 'hypervisor_reserved')
         vmLoad = self.getVMLoad()
-        hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
+        self.hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
         global hostLog
-        hostLog['hypervisorLoad'] = hypervisorLoad
+        hostLog['hypervisorLoad'] = self.hypervisorLoad
         hostLog['idleMemory'] = idleMemory
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
-        hypervisor_extra = max(hypervisor_reserved-hypervisorLoad, 0)
-        debuglogger.debug("Hypervisor Load is %dMB", hypervisorLoad)
+        hypervisor_extra = max(hypervisor_reserved-self.hypervisorLoad, 0)
+        debuglogger.debug("Hypervisor Load is %dMB", self.hypervisorLoad)
         #load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
         load = (stats['total'] - self.getAvailableMemory()) + hypervisor_extra - idleMemory
         return load
