@@ -137,12 +137,14 @@ class Host:
     def getLoadMem(self, stats, idleMemory):
         hypervisor_reserved = config.getint('monitor', 'hypervisor_reserved')
         vmLoad = self.getVMLoad()
-        self.hypervisorLoad = stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad
+        self.hypervisorLoad = max(stats['total'] - stats['free'] - (stats['buffers'] + stats['cached'])- vmLoad,0)
         global hostLog
-        hostLog['hypervisorLoad'] = self.hypervisorLoad
-        hostLog['idleMemory'] = idleMemory
         # hypervisor_extra ensures that atleast hypervisor_reserved memory is added towards host's load
         hypervisor_extra = max(hypervisor_reserved-self.hypervisorLoad, 0)
+        # next line is to ensure that other calculations use at least 500MB as hypervisor load
+        self.hypervisorLoad = max(self.hypervisorLoad, hypervisor_reserved)
+        hostLog['hypervisorLoad'] = self.hypervisorLoad
+        hostLog['idleMemory'] = idleMemory
         debuglogger.debug("Hypervisor Load is %dMB", self.hypervisorLoad)
         #load = vmLoad + hypervisorLoad + 0.1*(stats['buffers']+stats['cached']) - idleMemory#TODO: modify 0.9
         load = (stats['total'] - self.getAvailableMemory()) + hypervisor_extra - idleMemory

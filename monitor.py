@@ -111,6 +111,7 @@ def monitor():
     # Sum of the maxmem of all guest. Used to decide overcommitment factor and shares of each guest
     totalGuestMemory = 0.0
 
+    guest_reserved = config.getint('monitor', 'guest_reserved')
 
     # Monitor all the guests
     for uuid in guests.keys():
