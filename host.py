@@ -229,7 +229,7 @@ class Host:
         hostLog['usedmem'] = self.usedmem
         hostLog['loadmem'] = self.loadmem
         hostLog['avgloadmem'] = self.muMem
-
+        hostLog['swapmem'] = self.getSwap()
         debuglogger.debug('Host cpuUsage: %f', self.cpuUsage)
         debuglogger.debug('Host totalmem: %dMB', self.totalmem)
         debuglogger.debug('Host usedmem: %dMB', self.usedmem)
@@ -262,9 +262,23 @@ class Host:
             errorlogger.exception("Unable to get VM Load")
             return memUsed
 
+    def getSwap(self):
+        try:
+            f = open('/proc/meminfo')
+            lines = f.readlines()
+            total = int(lines[14].split()[1])/1024
+            free = int(lines[15].split()[1])/1024
+            f.close()
+            return (total-free)
+        except:
+            errorlogger.exception("Unable to get swap memory")
+            return 0
+
     def getAvailableMemory(self):
         try:
-            line = open('/proc/meminfo').readlines()[2]
+            f = open('/proc/meminfo')
+            line = f.readlines()[2]
+            f.close()
             return int(line.split()[1])/1024
         except:
             errorlogger.exception("Unable to get Available memory")
