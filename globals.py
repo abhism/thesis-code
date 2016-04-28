@@ -65,7 +65,7 @@ if config.getboolean('nova', 'enabled'):
     auth_demo = v3.Password(auth_url=auth_url,
                        username='demo',
                        password=password,
-                       project_domain_name='defualt',
+                       project_domain_name='default',
                        project_name='demo',
                        user_domain_name='default')
     debuglogger.debug('Authorized demo!')
@@ -79,7 +79,7 @@ if config.getboolean('nova', 'enabled'):
     auth_admin= v3.Password(auth_url=auth_url,
                        username='admin',
                        password=password,
-                       project_domain_name='defualt',
+                       project_domain_name='default',
                        project_name='admin',
                        user_domain_name='default')
     debuglogger.debug('Authorized admin!')

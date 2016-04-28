@@ -24,7 +24,7 @@ class RunningStats:
             if used > 100:
                 self.data.append(numpy.random.randint(used-250, used+250))
             else:
-                self.data.append(numpy.random.randint(0,100))
+                self.data.append(numpy.random.randint(0,10))
             self.n+=1
         pass
 
