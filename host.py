@@ -88,9 +88,6 @@ class Host:
 
     hypervisorLoad = -1
 
-    # candidates for migration due to cpu load
-    maybeMigrate = {}
-
     def __init__(self, conn):
         self.conn = conn
         self.thresh = config.getfloat('migration', 'migration_thresh')
@@ -176,9 +173,9 @@ class Host:
             self.dMem = 0
             if(self.muMem > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
-                if config.getboolean('migration', 'enabled') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
+                if config.getboolean('migration', 'enabled_memory') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     # migrate here
-                    migration.handle()
+                    migration.handle("memory")
 
     def checkCpu(self, stealTime):
         self.getCpuUsage()
@@ -202,18 +199,10 @@ class Host:
         #check if migration required by looking at steal times
         for uuid in stealTime.keys():
             if stealTime[uuid] > 10:
-                if uuid not in self.maybeMigrate.keys():
-                    self.maybeMigrate[uuid] = 1
-                else:
-                    self.maybeMigrate[uuid] = self.maybeMigrate[uuid] + 1
-                    if self.maybeMigrate[uuid] > 5:
-                        print "Migrating due to CPU imbalance"
-                        if config.getboolean('migration', 'enabled') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
-                            migration.handle()
-                            break
-            else:
-                self.maybeMigrate[uuid] = 0
-
+                print "Migrating due to CPU imbalance"
+                if config.getboolean('migration', 'enabled_cpu') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
+                    migration.handle("cpu")
+                    break
 
     def getCpuUsage(self):
         # get cpu usage

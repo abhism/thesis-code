@@ -254,7 +254,11 @@ def monitor():
                 idleMemory += idle[uuid]
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
             else:
-                idle[uuid] = softIdle[uuid] + hardIdle[uuid]
+                idle[uuid] = 0
+                if uuid in solfIdle.keys():
+                    idle[uuid] = idle[uuid] + softIdle[uuid]
+                if uuid in hardIdle.keys():
+                    idle[uuid] = idle[uuid] + hardIdle[uuid]
                 idleMemory += idle[uuid]
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
         #pot = calculatePot(host, idleMemory)

@@ -2,14 +2,15 @@ from globals import *
 import threading
 import time
 
-def handle():
+def handle(reason):
     if migrationFlag:
         debuglogger.debug('A guest is already under Migration')
         return
     hosts = nova_demo.hypervisors.list()
-    vmUuid = select_vm()
-    # TODO: explore if VmSize can be usedmem instead of currentmem
-    destination = select_dest(hosts, hostname, guests[vmUuid])
+    #vmUuid = select_vm(reason)
+    # TODO: fix the list of hosts and the index
+    # This part of code does not work
+    (vmUuid, destination) = select_pair(hosts, reason)
     if destination != -1:
         try:
             debuglogger.debug('Started migrating VM %s to host %s', vmUuid, hosts[destination].host_name)
@@ -34,9 +35,12 @@ def migrationStatus(vmUuid):
     migrationFlag = False
     debuglogger.debug('Finished migrating VM %s in %f time',vmUuid, end-start)
 
-def select_dest(hosts,hostname, guest):
-    index = -1
-    mn = 1000000.0
+def select_pair(hosts, reason):
+    global guests
+    global cpuCores
+    global hostname
+    pair = ()
+    mx = 0
     for i in hosts:
         if (i.host_name==hostname):
             continue
@@ -48,34 +52,49 @@ def select_dest(hosts,hostname, guest):
         mem_total = float(etcdClient.read(key2).value)
         cpu_cores = int(etcdClient.read(key3).value)
         cpu_used = float(etcdClient.read(key4).value)
-        # TODO: VVIP xxx should it be vmSize or memused?
-        # What about overcommitment here?
-        if ((mem_used+guest.currentActualmem)>mem_total):
-                continue
-
-        guestCpuUsage = guest.avgBusy*host.cpuCores
-        guestCpuDemand = guest.avgCpuDemand*host.cpuCores
-        guestUnsatisfiedDemand = guestCpuDemand - guestCpuUsage
         destCpuUsage = cpu_used*cpu_cores
         destCpuCapacity = 100*cpu_cores
-        # if not even half of the unsatisfied, do not migrate.
-        # TODO: is 0.5 the best parameter
-        if (destCpuCapacity - destCpuUsage) < (guestCpuUsage+0.5*guestUnsatisfiedDemand):
-            continue
-        mem = guest.currentActualmem + mem_used
-        cpu = guestCpuDemand + destCpuUsage
-        cost = pow(len(hosts),mem/mem_total) + pow(len(hosts),cpu/destCpuCapacity)
-        if (cost<mn):
-            mn = cost
-            index = i
-    return index
+        for uuid in guest.keys():
+            guest = guests[uuid]
+            # TODO: VVIP xxx should it be vmSize or memused?
+            # What about overcommitment here?
+            if ((mem_used+guest.memused)>mem_total):
+                    continue
+            guestCpuUsage = guest.avgBusy*cpuCores
+            guestCpuDemand = guest.avgCpuDemand*cpuCores
+            guestUnsatisfiedDemand = guestCpuDemand - guestCpuUsage
+            # if not even half of the unsatisfied, do not migrate.
+            # TODO: is 0.5 the best parameter
+            if (destCpuCapacity - destCpuUsage) < (guestCpuUsage+0.5*guestUnsatisfiedDemand):
+                continue
+            mem = guest.memused + mem_used
+            cpu = min(guestCpuDemand + destCpuUsage, destCpuCapacity)
+            cost = pow(len(hosts),mem/float(mem_total)) + pow(len(hosts),cpu/float(destCpuCapacity))
+            cost = cost/float(2*len(hosts))
+            benefit = 0
+            if reason == "memory":
+                benefit = (guest.avgUsed*100)/float(host.totalmem)
+                benefit = benefit/float(len(guests))
+            if reason == "cpu":
+                benefit = guest.avgBusy/float(len(guests))
+            # select the guest with maximum (benefit-cost)
+            if (benefit-cost>mx):
+                mx = benefit-cost
+                pair = (uuid, i)
+    return pair
 
 # TODO: explore other options for selecting candidate vm
-def select_vm():
-    smallestUuid = None
-    smallestmem = 1000000
-    for uuid in guests.keys():
-        if guests[uuid].currentmem < smallestmem:
-            smallestUuid = uuid
-            smallestmem = guests[uuid].currentmem
-    return smallestUuid
+# def select_vm(reason):
+#     global guests
+#     smallestUuid = None
+#     smallestmem = 1000000
+#     resourceUsed = 0
+#     for uuid in guests.keys():
+#         if reason == "memory":
+#             resourceUsed = (guests[uuid].usedmem*100)/float(guests[uuid].maxmem)
+#         elif:
+#             resourceUsed = guests[uuid].busyTime
+#         if guests[uuid].currentmem <= smallestmem and resourceUsed > 10:
+#             smallestUuid = uuid
+#             smallestmem = guests[uuid].currentmem
+#     return smallestUuid
