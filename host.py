@@ -169,13 +169,13 @@ class Host:
         H = self.h*self.stdMem.standardDeviation()
         if(abs(self.dMem) > H):
             print 'Profile Changed'
-            hostLog['etcdMemory'] = self.usedmem
+            hostLog['etcdMemory'] = self.muMem
             self.updateEtcd()
             # TODO: verify if making d 0 after profile change makes sense
             self.dMem = 0
             if(self.muMem > self.thresh*self.totalmem):
                 print 'Threshold exceeded. Migrate!'
-                hostLog['migrateMemory'] = self.usedmem
+                hostLog['migrateMemory'] = self.muMem
                 if config.getboolean('migration', 'enabled_memory') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     # migrate here
                     migration.handle("memory")
@@ -196,7 +196,7 @@ class Host:
         #print "H: %f"%H
         if(abs(self.dCpu) > H):
             print 'Cpu Profile Changed'
-            hostLog['etcdCpu'] = self.cpuUsage
+            hostLog['etcdCpu'] = self.muCpu
             self.updateEtcd()
             # TODO: verify if making d 0 after profile change makes sense
             self.dCpu = 0
@@ -205,7 +205,7 @@ class Host:
         for uuid in stealTime.keys():
             if stealTime[uuid] > 10:
                 print "Migrating due to CPU imbalance"
-                hostLog['migrateCpu'] = self.cpuUsage
+                hostLog['migrateCpu'] = self.muCpu
                 if config.getboolean('migration', 'enabled_cpu') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     migration.handle("cpu")
                     break
