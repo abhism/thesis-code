@@ -11,11 +11,11 @@ def handle(reason):
     # TODO: fix the list of hosts and the index
     # This part of code does not work
     (vmUuid, destination) = select_pair(hosts, reason)
-    if destination != -1:
+    if destination != -1 and vmUuid != -1:
         try:
             debuglogger.debug('Started migrating VM %s to host %s', vmUuid, hosts[destination].host_name)
             migrationFlag = True
-            nova_admin.servers.live_migrate(vmUuid, hosts[destination].host_name, False, False);
+            nova_admin.servers.live_migrate(vmUuid, destination.host_name, False, False);
             migrationStatusThread = threading.Thread(target=migrationStatus, args=(vmUuid,), name="migrationStatus")
             migrationStatusThread.start()
         except Exception as e:
@@ -39,15 +39,15 @@ def select_pair(hosts, reason):
     global guests
     global cpuCores
     global hostname
-    pair = ()
+    pair = (-1,-1)
     mx = 0
     for i in hosts:
         if (i.host_name==hostname):
             continue
-        key1 = i + '/loadmem'
-        key2 = i + '/totalmem'
-        key3 = i + '/cpucores'
-        key4 = i + '/usedcpu'
+        key1 = i.host_name + '/loadmem'
+        key2 = i.host_name + '/totalmem'
+        key3 = i.host_name + '/cpucores'
+        key4 = i.host_name + '/usedcpu'
         mem_used = float(etcdClient.read(key1).value)
         mem_total = float(etcdClient.read(key2).value)
         cpu_cores = int(etcdClient.read(key3).value)
@@ -70,10 +70,10 @@ def select_pair(hosts, reason):
             mem = guest.memused + mem_used
             cpu = min(guestCpuDemand + destCpuUsage, destCpuCapacity)
             cost = pow(len(hosts),mem/float(mem_total)) + pow(len(hosts),cpu/float(destCpuCapacity))
-            cost = cost/float(2*len(hosts))
+            cost = (cost*100)/float(2*len(hosts))
             benefit = 0
             if reason == "memory":
-                benefit = (guest.avgUsed*100)/float(host.totalmem)
+                benefit = (guest.allocatedmem*100)/float(host.totalmem)
                 benefit = benefit/float(len(guests))
             if reason == "cpu":
                 benefit = guest.avgBusy/float(len(guests))
