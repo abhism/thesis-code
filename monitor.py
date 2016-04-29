@@ -281,7 +281,7 @@ def monitor():
             if(pot-need < -100):
                 errorlogger.warn("More than 100MB deficit in pot. check the algo.")
             else:
-                needyGuest.balloon(neeedyGuest.currentActualmem + need)
+                needyGuest.balloon(needyGuest.currentActualmem + need)
                 pot -= need
 
 def sendLog():
