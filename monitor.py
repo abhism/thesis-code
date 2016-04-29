@@ -253,6 +253,7 @@ def monitor():
                 idle[uuid] = calculateSoftIdle(guest) + calculateHardIdle(guest)
                 idleMemory += idle[uuid]
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
+                excessUsedMemory = excessUsedMemory + excessUsed[uuid]
             else:
                 idle[uuid] = 0
                 if uuid in softIdle.keys():
