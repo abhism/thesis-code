@@ -262,6 +262,7 @@ def monitor():
                     idle[uuid] = idle[uuid] + hardIdle[uuid]
                 idleMemory += idle[uuid]
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
+                excessUsedMemory = excessUsedMemory + excessUsed[uuid]
         #pot = calculatePot(host, idleMemory)
         needAfterIdle = extraMemory - idleMemory
         for needyUuid in needy.keys():
