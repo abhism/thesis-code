@@ -208,7 +208,7 @@ class Host:
                 hostLog['migrateCpu'] = self.muCpu
                 if config.getboolean('migration', 'enabled_cpu') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     migration.handle("cpu")
-                    break
+                break
 
     def getCpuUsage(self):
         # get cpu usage
