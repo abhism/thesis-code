@@ -255,7 +255,7 @@ def monitor():
                 excessUsed[uuid] = max(guest.currentActualmem - idle[uuid] - entitlement, 0)
             else:
                 idle[uuid] = 0
-                if uuid in solfIdle.keys():
+                if uuid in softIdle.keys():
                     idle[uuid] = idle[uuid] + softIdle[uuid]
                 if uuid in hardIdle.keys():
                     idle[uuid] = idle[uuid] + hardIdle[uuid]
