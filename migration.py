@@ -3,6 +3,7 @@ import threading
 import time
 
 def handle(reason):
+    global migrationFlag
     if migrationFlag:
         debuglogger.debug('A guest is already under Migration')
         return
@@ -24,6 +25,7 @@ def handle(reason):
 
 
 def migrationStatus(vmUuid):
+    global migrationFlag
     x = nova_demo.servers.get(vmUuid).status
     start = time.time()
     while(x=='MIGRATING'):
