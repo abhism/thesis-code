@@ -7,16 +7,16 @@ def handle(reason):
     if migrationFlag:
         debuglogger.debug('A guest is already under Migration')
         return
-    hosts = nova_demo.hypervisors.list()
+    hosts = nova_admin.hypervisors.list()
     #vmUuid = select_vm(reason)
     # TODO: fix the list of hosts and the index
     # This part of code does not work
     (vmUuid, destination) = select_pair(hosts, reason)
     if destination != -1 and vmUuid != -1:
         try:
-            debuglogger.debug('Started migrating VM %s to host %s', vmUuid, hosts[destination].host_name)
+            debuglogger.debug('Started migrating VM %s to host %s', vmUuid, destination.hypervisor_hostname)
             migrationFlag = True
-            nova_admin.servers.live_migrate(vmUuid, destination.host_name, False, False);
+            nova_admin.servers.live_migrate(vmUuid, destination.hypervisor_hostname, False, False);
             migrationStatusThread = threading.Thread(target=migrationStatus, args=(vmUuid,), name="migrationStatus")
             migrationStatusThread.start()
         except Exception as e:
@@ -41,26 +41,27 @@ def select_pair(hosts, reason):
     global guests
     global cpuCores
     global hostname
+    global host
     pair = (-1,-1)
-    mx = 0
+    mx = -10000000
     for i in hosts:
-        if (i.host_name==hostname):
+        if (i.hypervisor_hostname==hostname):
             continue
-        key1 = i.host_name + '/loadmem'
-        key2 = i.host_name + '/totalmem'
-        key3 = i.host_name + '/cpucores'
-        key4 = i.host_name + '/usedcpu'
+        key1 = i.hypervisor_hostname + '/loadmem'
+        key2 = i.hypervisor_hostname + '/totalmem'
+        key3 = i.hypervisor_hostname + '/cpucores'
+        key4 = i.hypervisor_hostname + '/usedcpu'
         mem_used = float(etcdClient.read(key1).value)
         mem_total = float(etcdClient.read(key2).value)
         cpu_cores = int(etcdClient.read(key3).value)
         cpu_used = float(etcdClient.read(key4).value)
         destCpuUsage = cpu_used*cpu_cores
         destCpuCapacity = 100*cpu_cores
-        for uuid in guest.keys():
+        for uuid in guests.keys():
             guest = guests[uuid]
             # TODO: VVIP xxx should it be vmSize or memused?
             # What about overcommitment here?
-            if ((mem_used+guest.memused)>mem_total):
+            if ((mem_used+guest.usedmem)>mem_total):
                     continue
             guestCpuUsage = guest.avgBusy*cpuCores
             guestCpuDemand = guest.avgCpuDemand*cpuCores
@@ -69,7 +70,7 @@ def select_pair(hosts, reason):
             # TODO: is 0.5 the best parameter
             if (destCpuCapacity - destCpuUsage) < (guestCpuUsage+0.5*guestUnsatisfiedDemand):
                 continue
-            mem = guest.memused + mem_used
+            mem = guest.usedmem + mem_used
             cpu = min(guestCpuDemand + destCpuUsage, destCpuCapacity)
             cost = pow(len(hosts),mem/float(mem_total)) + pow(len(hosts),cpu/float(destCpuCapacity))
             cost = (cost*100)/float(2*len(hosts))
