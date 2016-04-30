@@ -4,6 +4,8 @@ import time
 
 def handle(reason):
     global migrationFlag
+    global etcdClient
+    global guests
     if migrationFlag:
         debuglogger.debug('A guest is already under Migration')
         return
@@ -13,7 +15,25 @@ def handle(reason):
     # This part of code does not work
     (vmUuid, destination) = select_pair(hosts, reason)
     if destination != -1 and vmUuid != -1:
+        # reclaim memory from destination
         try:
+            etcdClient.write('/'+destination.hypervisor_hostname+'/reclaim', guests[vmUuid].maxmem)
+            # wait for  max 10 seconds to reclaim
+            t = 0
+            migrate = False
+            while time < 10:
+                time.sleep(2)
+                t+=2
+                if float(etcdClient.read('/' + destination.hypervisor_hostname + '/reclaim').value) <= 0:
+                    migrate = True
+                    break
+        except:
+            errorlogger.exception('Cannot contact destination for reclamation')
+        if !migrate:
+            debuglogger.debug('Cannot migrate VM %s to host %s because of memory reclamation problems',
+                    vmUuid, destination.hypervisor_hostname)
+            return
+            # migrate if memory reclaimed
             debuglogger.debug('Started migrating VM %s to host %s', vmUuid, destination.hypervisor_hostname)
             migrationFlag = True
             nova_admin.servers.live_migrate(vmUuid, destination.hypervisor_hostname, False, False);
@@ -61,7 +81,7 @@ def select_pair(hosts, reason):
             guest = guests[uuid]
             # TODO: VVIP xxx should it be vmSize or memused?
             # What about overcommitment here?
-            if ((mem_used+guest.usedmem)>mem_total):
+            if ((mem_used+guest.maxmem)>mem_total):
                     continue
             guestCpuUsage = guest.avgBusy*cpuCores
             guestCpuDemand = guest.avgCpuDemand*cpuCores

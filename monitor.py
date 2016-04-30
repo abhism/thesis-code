@@ -310,6 +310,43 @@ def sendLog():
     hostLog.clear()
     guestLog.clear()
 
+def reclaimForMigration():
+    global hostname
+    global guests
+    global etcdClient
+    global host
+    toReclaim = float(etcdClient.read('/' + hostname + '/reclaim').value)
+    if toReclaim <= 0:
+        return
+    totalSoftIdle = 0
+    totalHardIdle = 0
+    softIdle = {}
+    hardIdle = {}
+    for uuid in guests.keys():
+        softIdle[uuid] = calculateSoftIdle(guest)
+        hardIdle[uuid] = calculateHardIdle(guest)
+        totalSoftIdle = totalSoftIdle + softIdle[uuid]
+        totalHardIdle = totalHardIdle + hardIdle[uuid]
+    pot = calculatePot(host, totalSoftIdle + totalHardIdle)
+    toReclaim = toReclaim - pot
+    while toReclaim > 0 and len(softIdle) > 0:
+        idleUuid = softIdle.keys()[0]
+        softIdleGuest = guests[idleUuid]
+        softIdleGuestMem = softIdle[idleUuid]
+        softIdleGuest.balloon(softIdleGuest.currentActualmem - softIdleGuestMem)
+        toReclaim = toReclaim - softIdleGuestMem
+        del softIdle[idleUuid]
+    while toReclaim > 0 and len(hardIdle) > 0:
+        idleUuid = hardIdle.keys()[0]
+        hardIdleGuest = guests[idleUuid]
+        hardIdleGuestMem = hardIdle[idleUuid]
+        hardIdleGuest.balloon(hardIdleGuest.usedmem - hardIdleGuestMem)
+        toReclaim = toReclaim - hardIdleGuestMem
+        del hardIdle[idleUuid]
+    etcdClient.write('/'+hostname+'/reclaim', toReclaim)
+
+
+
 def main():
     global config
     global host
@@ -372,7 +409,14 @@ def main():
         except Exception as e:
             errorlogger.exception('An exception occured in monitoring')
         sendLog()
-        time.sleep(config.getint('monitor', 'time'))
+        t = 0
+        while t < config.getint('monitor', 'time'):
+            try:
+                reclaimForMigration()
+            except Exception as e:
+                errorlogger.exception('An exception occured in reclaimForMigration')
+            time.sleep(2)
+            t +=2
 
 
 if __name__ == "__main__":
