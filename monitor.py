@@ -352,7 +352,7 @@ def main():
     global host
     global guests
     global cpuCores
-
+    global etcdClient
     # Set up logger
     #logging.basicConfig(filename='monitor.log',format='%(asctime)s: %(levelname)8s: %(message)s', level=logging.DEBUG)
     debuglogger.info('Monitoring started!')
@@ -396,7 +396,7 @@ def main():
 
     cpuCores = conn.getCPUMap(0)[0]
     host = Host(conn)
-
+    etcdClient.write('/'+hostname+'/reclaim', 0)
     for domain in doms:
         if domain.isActive():
             addNewDomain(domain)

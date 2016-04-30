@@ -27,12 +27,10 @@ def handle(reason):
                 if float(etcdClient.read('/' + destination.hypervisor_hostname + '/reclaim').value) <= 0:
                     migrate = True
                     break
-        except:
-            errorlogger.exception('Cannot contact destination for reclamation')
-        if !migrate:
-            debuglogger.debug('Cannot migrate VM %s to host %s because of memory reclamation problems',
-                    vmUuid, destination.hypervisor_hostname)
-            return
+            if not migrate:
+                debuglogger.debug('Cannot migrate VM %s to host %s because of memory reclamation problems',
+                        vmUuid, destination.hypervisor_hostname)
+                return
             # migrate if memory reclaimed
             debuglogger.debug('Started migrating VM %s to host %s', vmUuid, destination.hypervisor_hostname)
             migrationFlag = True
