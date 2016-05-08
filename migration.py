@@ -43,17 +43,21 @@ def handle(reason):
 
 
 def migrationStatus(vmUuid):
+    global hostLog
     global migrationFlag
+    global host
     x = nova_demo.servers.get(vmUuid).status
     start = time.time()
     while(x=='MIGRATING'):
         time.sleep(1)
         x = nova_demo.servers.get(vmUuid).status
         if(time.time()- start > 300):
-            errorlogger.error('Migrating VM %s is taking too much time - %f.', time.time() - start)
+            errorlogger.error('Migrating VM %s is taking too much time - %f.', str(vmUuid), time.time() - start)
     end = time.time()
     migrationFlag = False
     debuglogger.debug('Finished migrating VM %s in %f time',vmUuid, end-start)
+    hostLog['successMigration'] = host.muCpu
+
 
 def select_pair(hosts, reason):
     global guests

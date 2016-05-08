@@ -1,6 +1,7 @@
 import ConfigParser
 import logging
 import os
+import psutil
 
 guests = {}
 
@@ -95,9 +96,9 @@ try:
     etcdClient = None
     if config.getboolean('etcd', 'enabled'):
         import etcd
-        host = config.get('etcd', 'host')
+        ehost = config.get('etcd', 'host')
         port = config.getint('etcd', 'port') #default id 2379
-        etcdClient = etcd.Client(host=host, port=port)
+        etcdClient = etcd.Client(host=ehost, port=port)
 except:
     errorlogger.exception("Unable to connect to etcd")
 
@@ -110,3 +111,7 @@ except Exception as e:
 
 # will be modified by the monitor.py, which gets it from libvirtConnection
 cpuCores = 8
+
+# Self Monitoring
+selfPid = os.getpid()
+selfProcess = psutil.Process(selfPid)

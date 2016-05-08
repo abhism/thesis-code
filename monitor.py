@@ -12,6 +12,7 @@ import requests
 from host import *
 from guest import *
 from globals import *
+import psutil
 
 # Run the libvirt event loop
 def virEventLoopNativeRun():
@@ -304,6 +305,11 @@ def sendLog():
             except:
                 n = ord(n)
             payload = payload + ('host,guest='+guest+' value='+str(n)+'\n')
+        # add self monitoring metrics
+        meminfo = selfProcess.get_memory_info()
+        payload = payload + ('selfRss,host='+hostname+' value='+str(meminfo.rss/(1024*1024))+'\n')
+        payload = payload + ('selfVms,host='+hostname+' value='+str(meminfo.vms/(1024*1024))+'\n')
+        payload = payload + ('selfCpu,host='+hostname+' value='+str(selfProcess.get_cpu_percent(interval=None))+'\n')
         resp = requests.post('http://'+ihost+'/write?db='+db, data=payload)
         if resp.status_code != 204:
             debuglogger.warn('Unable to send request to influx db %s', resp.content)
