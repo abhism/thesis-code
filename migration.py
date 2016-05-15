@@ -2,7 +2,7 @@ from globals import *
 import threading
 import time
 
-def handle(reason):
+def handle(reason, totalmem):
     global migrationFlag
     global etcdClient
     global guests
@@ -13,7 +13,7 @@ def handle(reason):
     #vmUuid = select_vm(reason)
     # TODO: fix the list of hosts and the index
     # This part of code does not work
-    (vmUuid, destination) = select_pair(hosts, reason)
+    (vmUuid, destination) = select_pair(hosts, reason, totalmem)
     if destination != -1 and vmUuid != -1:
         # reclaim memory from destination
         try:
@@ -53,17 +53,17 @@ def migrationStatus(vmUuid):
         x = nova_demo.servers.get(vmUuid).status
         if(time.time()- start > 300):
             errorlogger.error('Migrating VM %s is taking too much time - %f.', str(vmUuid), time.time() - start)
+            break
     end = time.time()
     migrationFlag = False
     debuglogger.debug('Finished migrating VM %s in %f time',vmUuid, end-start)
     hostLog['successMigration'] = host.muCpu
 
 
-def select_pair(hosts, reason):
+def select_pair(hosts, reason, totalmem):
     global guests
     global cpuCores
     global hostname
-    global host
     pair = (-1,-1)
     mx = -10000000
     for i in hosts:
@@ -98,7 +98,7 @@ def select_pair(hosts, reason):
             cost = (cost*100)/float(2*len(hosts))
             benefit = 0
             if reason == "memory":
-                benefit = (guest.allocatedmem*100)/float(host.totalmem)
+                benefit = (guest.allocatedmem*100)/float(totalmem)
                 benefit = benefit/float(len(guests))
             if reason == "cpu":
                 benefit = guest.avgBusy/float(len(guests))

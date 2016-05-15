@@ -178,7 +178,7 @@ class Host:
                 hostLog['migrateMemory'] = self.muMem
                 if config.getboolean('migration', 'enabled_memory') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
                     # migrate here
-                    migration.handle("memory")
+                    migration.handle("memory", totalmem)
 
     def checkCpu(self, stealTime):
         global hostLog
@@ -207,7 +207,7 @@ class Host:
                 print "Migrating due to CPU imbalance"
                 hostLog['migrateCpu'] = self.muCpu
                 if config.getboolean('migration', 'enabled_cpu') and config.getboolean('etcd', 'enabled') and config.getboolean('nova', 'enabled'):
-                    migration.handle("cpu")
+                    migration.handle("cpu", totalmem)
                 break
 
     def getCpuUsage(self):
